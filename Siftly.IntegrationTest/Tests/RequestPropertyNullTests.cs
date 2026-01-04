@@ -22,7 +22,7 @@ public class RequestPropertyNullTests
 
         var context = new SimpleDbContext(options);
 
-        // Test datasý
+        // Test datasï¿½
         for (int i = 1; i <= 50; i++)
         {
             context.Employees.Add(new SimpleEmployee { Name = $"Employee {i}" });
@@ -37,15 +37,15 @@ public class RequestPropertyNullTests
         // ARRANGE
         var context = await GetContext();
 
-        // Görseldeki durum: Obje var ama içindekiler null (veya default)
+        // Gï¿½rseldeki durum: Obje var ama iï¿½indekiler null (veya default)
         var request = new QueryFilterRequest
         {
             Filter = null,
             Sort = null,
             Cursor = null,
             IncludeCount = true,
-            PageNumber = 0,
-            PageSize = 20 // Default deðer
+            Page = 0,
+            PageSize = 20 // Default deï¿½er
         };
 
         // ACT
@@ -53,8 +53,8 @@ public class RequestPropertyNullTests
 
         // ASSERT
         result.Should().NotBeNull();
-        result.TotalCount.Should().Be(50); // Count düzgün çalýþmalý
-        result.ListData.Should().HaveCount(20); // Take düzgün çalýþmalý
+        result.TotalCount.Should().Be(50); // Count dï¿½zgï¿½n ï¿½alï¿½ï¿½malï¿½
+        result.ListData.Should().HaveCount(20); // Take dï¿½zgï¿½n ï¿½alï¿½ï¿½malï¿½
         result.Skip.Should().Be(0);
         result.Take.Should().Be(20);
     }
@@ -67,7 +67,7 @@ public class RequestPropertyNullTests
 
         var request = new QueryFilterRequest
         {
-            PageNumber = 10,
+            Page = 10,
             PageSize = 5,
             IncludeCount = true
             // Filter ve Sort null
@@ -79,6 +79,6 @@ public class RequestPropertyNullTests
         // ASSERT
         result.ListData.Should().HaveCount(5);
         result.TotalCount.Should().Be(50);
-        result.ListData.First().Name.Should().Be("Employee 11");
+        result.ListData.First().Name.Should().Be("Employee 46");
     }
 }

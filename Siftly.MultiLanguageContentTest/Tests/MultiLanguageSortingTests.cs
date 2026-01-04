@@ -19,6 +19,7 @@ public class MultiLanguageSortingTests : IAsyncLifetime
             options.RegisterTypeBuilder(new MultiLanguageExpressionBuilder());
             options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("en")); // Default fallback: English
             options.MaxPageSize = 100;
+            options.DefaultPageSize = 20;
         });
 
         var dbOptions = new DbContextOptionsBuilder<MultiLangDbContext>()

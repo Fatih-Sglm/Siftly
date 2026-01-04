@@ -342,7 +342,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         await using var context = fixture.CreateContext();
         var request = new QueryFilterRequest
         {
-            PageNumber = 2,
+            Page = 2,
             PageSize = 2,
             Sort = [new SortDescriptor("Id", ListSortDirection.Ascending)]
         };

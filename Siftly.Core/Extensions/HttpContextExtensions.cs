@@ -26,7 +26,6 @@ public static class HttpContextExtensions
 
         var request = new QueryFilterRequest
         {
-            PageNumber = 0,
             IncludeCount = true
         };
 
@@ -46,14 +45,14 @@ public static class HttpContextExtensions
             request.PageSize = Math.Min(pageSize, effectiveMaxPageSize);
         }
 
-        // PAGE NUMBER (skip or pageNumber)
-        if (query.TryGetValue("skip", out var skipVal) && int.TryParse(skipVal, out var skip) && skip > 0)
+
+        if (query.TryGetValue("pageNumber", out var pageNumberVal) && int.TryParse(pageNumberVal, out var pageNumber) && pageNumber >= 1)
         {
-            request.PageNumber = skip;
+            request.Page = pageNumber;
         }
-        else if (query.TryGetValue("pageNumber", out var pageNumberVal) && int.TryParse(pageNumberVal, out var pageNumber) && pageNumber > 1)
+        else if (query.TryGetValue("skip", out var skipVal) && int.TryParse(skipVal, out var skip) && skip >= 0)
         {
-            request.PageNumber = (pageNumber - 1) * request.PageSize;
+            request.Page = (skip / request.PageSize) + 1;
         }
 
         // INCLUDE COUNT

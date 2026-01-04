@@ -118,39 +118,48 @@ public class MultiLanguageSortExpressionBuilder(string defaultLanguage = "tr") :
             ? mlsd.LanguageCode 
             : defaultLanguage;
 
-        // Build: x.Name.Content.FirstOrDefault(c => c.Language == "tr").Value
+        // Build: x.Name.Content.Where(c => c.Language == "tr").Select(c => c.Value).FirstOrDefault()
+        // This pattern is EF Core translatable (scalar projection before FirstOrDefault)
         var contentProperty = Expression.Property(propertyAccess, nameof(MultiLanguageContent.Content));
         
-        // Use FirstOrDefault to get the translation for specific language
+        // Parameter for lambda expressions
         var itemParam = Expression.Parameter(typeof(LangContentDto), "c");
+        
+        // 1. Where(c => c.Language == "tr")
         var langProperty = Expression.Property(itemParam, nameof(LangContentDto.Language));
         var langEquals = Expression.Equal(langProperty, Expression.Constant(languageCode));
-        var predicate = Expression.Lambda<Func<LangContentDto, bool>>(langEquals, itemParam);
-
-        // FirstOrDefault(c => c.Language == "tr") - need the overload with Func<T, bool> predicate
+        var wherePredicate = Expression.Lambda<Func<LangContentDto, bool>>(langEquals, itemParam);
+        
+        var whereMethod = typeof(Enumerable)
+            .GetMethods()
+            .First(m => m.Name == "Where" && m.GetParameters().Length == 2 
+                && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2)
+            .MakeGenericMethod(typeof(LangContentDto));
+        
+        var whereCall = Expression.Call(whereMethod, contentProperty, wherePredicate);
+        
+        // 2. Select(c => c.Value)
+        var selectParam = Expression.Parameter(typeof(LangContentDto), "c");
+        var valueProperty = Expression.Property(selectParam, nameof(LangContentDto.Value));
+        var selectLambda = Expression.Lambda<Func<LangContentDto, string>>(valueProperty, selectParam);
+        
+        var selectMethod = typeof(Enumerable)
+            .GetMethods()
+            .First(m => m.Name == "Select" && m.GetParameters().Length == 2
+                && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2)
+            .MakeGenericMethod(typeof(LangContentDto), typeof(string));
+        
+        var selectCall = Expression.Call(selectMethod, whereCall, selectLambda);
+        
+        // 3. FirstOrDefault()
         var firstOrDefaultMethod = typeof(Enumerable)
             .GetMethods()
-            .First(m => m.Name == "FirstOrDefault" 
-                && m.GetParameters().Length == 2 
-                && m.GetParameters()[1].ParameterType.IsGenericType 
-                && m.GetParameters()[1].ParameterType.GetGenericTypeDefinition() == typeof(Func<,>))
-            .MakeGenericMethod(typeof(LangContentDto));
-
-        var firstOrDefaultCall = Expression.Call(firstOrDefaultMethod, contentProperty, predicate);
-
-        // Handle null case: FirstOrDefault()?.Value ?? ""
-        // Since we can't use ?. in expression trees, we use a conditional
-        var nullCheck = Expression.Equal(firstOrDefaultCall, Expression.Constant(null, typeof(LangContentDto)));
-        var valueProperty = Expression.Property(firstOrDefaultCall, nameof(LangContentDto.Value));
-        var emptyString = Expression.Constant(string.Empty);
-
-        // condition ? "" : firstOrDefault.Value
-        var conditionalExpression = Expression.Condition(
-            nullCheck,
-            emptyString,
-            valueProperty);
-
-        return conditionalExpression;
+            .First(m => m.Name == "FirstOrDefault" && m.GetParameters().Length == 1)
+            .MakeGenericMethod(typeof(string));
+        
+        var firstOrDefaultCall = Expression.Call(firstOrDefaultMethod, selectCall);
+        
+        return firstOrDefaultCall;
     }
 }
 

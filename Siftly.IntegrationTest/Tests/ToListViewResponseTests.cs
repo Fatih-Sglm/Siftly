@@ -13,7 +13,7 @@ public class ToListViewResponseTests(InMemoryFixture fixture)
         var request = new QueryFilterRequest
         {
             IncludeCount = true,
-            PageNumber = 2,
+            Page = 2,
             PageSize = 3
         };
 

@@ -77,7 +77,7 @@ public static class QueryFilterExtensions
         // 4. Pagination (Skip/Take)
         if (request.Cursor == null)
         {
-            query = query.Skip(request.PageNumber);
+            query = query.Skip(request.Offset);
         }
 
         var take = Math.Min(request.PageSize, options.MaxPageSize);

@@ -32,6 +32,11 @@ public class QueryFilterOptions
     public int MaxPageSize { get; set; } = 1000;
 
     /// <summary>
+    /// Default page size when not specified in request
+    /// </summary>
+    public int DefaultPageSize { get; set; } = 20;
+
+    /// <summary>
     /// Registered type expression builders for filtering
     /// </summary>
     internal Dictionary<Type, ITypeExpressionBuilder> TypeBuilders { get; } = [];
