@@ -240,7 +240,6 @@ public async Task<ActionResult<ListViewResponse<ProductDto>>> Query()
 }
 ```
 
-## 🌍 Multi-Language Content Support
 
 Siftly allows you to extend filtering and sorting for complex types like multi-language JSON content.
 
