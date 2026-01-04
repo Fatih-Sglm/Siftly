@@ -44,8 +44,8 @@ public class RequestPropertyNullTests
             Sort = null,
             Cursor = null,
             IncludeCount = true,
-            Skip = 0,
-            Take = 20 // Default deðer
+            PageNumber = 0,
+            PageSize = 20 // Default deðer
         };
 
         // ACT
@@ -67,8 +67,8 @@ public class RequestPropertyNullTests
 
         var request = new QueryFilterRequest
         {
-            Skip = 10,
-            Take = 5,
+            PageNumber = 10,
+            PageSize = 5,
             IncludeCount = true
             // Filter ve Sort null
         };

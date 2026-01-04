@@ -280,8 +280,8 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         await using var context = fixture.CreateContext();
         var request = new QueryFilterRequest
         {
-            Skip = 2,
-            Take = 2,
+            PageNumber = 2,
+            PageSize = 2,
             Sort = [new SortDescriptor("Id", ListSortDirection.Ascending)]
         };
 

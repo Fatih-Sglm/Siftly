@@ -13,8 +13,8 @@ public class ToListViewResponseTests(InMemoryFixture fixture)
         var request = new QueryFilterRequest
         {
             IncludeCount = true,
-            Skip = 2,
-            Take = 3
+            PageNumber = 2,
+            PageSize = 3
         };
 
         // ACT
@@ -34,7 +34,7 @@ public class ToListViewResponseTests(InMemoryFixture fixture)
         var request = new QueryFilterRequest
         {
             IncludeCount = true,
-            Take = 5
+            PageSize = 5
         };
 
         // ACT - Projeksiyon (Select) ile DTO'ya çevirme

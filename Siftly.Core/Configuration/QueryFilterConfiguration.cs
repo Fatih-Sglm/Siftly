@@ -32,12 +32,17 @@ public class QueryFilterOptions
     public int MaxPageSize { get; set; } = 1000;
 
     /// <summary>
-    /// Registered type expression builders
+    /// Registered type expression builders for filtering
     /// </summary>
     internal Dictionary<Type, ITypeExpressionBuilder> TypeBuilders { get; } = [];
 
     /// <summary>
-    /// Register a custom type expression builder for type T
+    /// Registered sort expression builders for custom type sorting
+    /// </summary>
+    internal Dictionary<Type, object> SortBuilders { get; } = [];
+
+    /// <summary>
+    /// Register a custom type expression builder for filtering type T
     /// </summary>
     public QueryFilterOptions RegisterTypeBuilder<T>(ITypeExpressionBuilder<T> builder)
     {
@@ -46,10 +51,35 @@ public class QueryFilterOptions
     }
 
     /// <summary>
-    /// Get a builder for a specific type if registered
+    /// Register a custom sort expression builder for sorting type T
+    /// </summary>
+    public QueryFilterOptions RegisterSortBuilder<T>(ISortExpressionBuilder<T> builder)
+    {
+        SortBuilders[typeof(T)] = builder;
+        return this;
+    }
+
+    /// <summary>
+    /// Get a type builder for filtering if registered
     /// </summary>
     public ITypeExpressionBuilder? GetTypeBuilder(Type type)
     {
         return TypeBuilders.TryGetValue(type, out var builder) ? builder : null;
+    }
+
+    /// <summary>
+    /// Get a sort builder for a specific type if registered
+    /// </summary>
+    public ISortExpressionBuilder<T>? GetSortBuilder<T>()
+    {
+        return SortBuilders.TryGetValue(typeof(T), out var builder) ? builder as ISortExpressionBuilder<T> : null;
+    }
+
+    /// <summary>
+    /// Get a sort builder for a specific type if registered (non-generic)
+    /// </summary>
+    public object? GetSortBuilder(Type type)
+    {
+        return SortBuilders.TryGetValue(type, out var builder) ? builder : null;
     }
 }

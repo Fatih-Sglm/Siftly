@@ -9,12 +9,12 @@ public class QueryFilterRequest
     /// <summary>
     /// Number of items to take (page size)
     /// </summary>
-    public int Take { get; set; } = 20;
+    public int PageSize { get; set; } = 20;
 
     /// <summary>
     /// Number of items to skip (for offset-based pagination)
     /// </summary>
-    public int Skip { get; set; } = 0;
+    public int PageNumber { get; set; } = 0;
 
     /// <summary>
     /// Sorting configuration

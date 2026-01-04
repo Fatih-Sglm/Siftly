@@ -9,6 +9,14 @@ public class MultiLangFilter : FilterCondition
     public string LanguageCode { get; set; } = "tr";
 }
 
+/// <summary>
+/// Custom sort descriptor for MultiLanguageContent with language code
+/// </summary>
+public class MultiLangSortDescriptor : SortDescriptor
+{
+    public string LanguageCode { get; set; } = "tr";
+}
+
 public class MultiLanguageExpressionBuilder : ITypeExpressionBuilder<MultiLanguageContent>
 {
     public Expression? BuildExpression(Expression propertyAccess, FilterCondition condition)
@@ -96,3 +104,53 @@ public class MultiLanguageExpressionBuilder : ITypeExpressionBuilder<MultiLangua
     private static MethodCallExpression BuildEndsWithExpression(Expression translationsProperty, string? languageCode, string searchValue, bool caseSensitive)
         => BuildStringMethodExpression(translationsProperty, languageCode, searchValue, caseSensitive, nameof(string.EndsWith));
 }
+
+/// <summary>
+/// Custom sort expression builder for MultiLanguageContent.
+/// Extracts a sortable string value from the MultiLanguageContent for ordering.
+/// </summary>
+public class MultiLanguageSortExpressionBuilder(string defaultLanguage = "tr") : ISortExpressionBuilder<MultiLanguageContent>
+{
+    public Expression? BuildSortExpression(Expression propertyAccess, SortDescriptor sortDescriptor)
+    {
+        // Get language code from MultiLangSortDescriptor if available, otherwise use default
+        string languageCode = sortDescriptor is MultiLangSortDescriptor mlsd 
+            ? mlsd.LanguageCode 
+            : defaultLanguage;
+
+        // Build: x.Name.Content.FirstOrDefault(c => c.Language == "tr").Value
+        var contentProperty = Expression.Property(propertyAccess, nameof(MultiLanguageContent.Content));
+        
+        // Use FirstOrDefault to get the translation for specific language
+        var itemParam = Expression.Parameter(typeof(LangContentDto), "c");
+        var langProperty = Expression.Property(itemParam, nameof(LangContentDto.Language));
+        var langEquals = Expression.Equal(langProperty, Expression.Constant(languageCode));
+        var predicate = Expression.Lambda<Func<LangContentDto, bool>>(langEquals, itemParam);
+
+        // FirstOrDefault(c => c.Language == "tr") - need the overload with Func<T, bool> predicate
+        var firstOrDefaultMethod = typeof(Enumerable)
+            .GetMethods()
+            .First(m => m.Name == "FirstOrDefault" 
+                && m.GetParameters().Length == 2 
+                && m.GetParameters()[1].ParameterType.IsGenericType 
+                && m.GetParameters()[1].ParameterType.GetGenericTypeDefinition() == typeof(Func<,>))
+            .MakeGenericMethod(typeof(LangContentDto));
+
+        var firstOrDefaultCall = Expression.Call(firstOrDefaultMethod, contentProperty, predicate);
+
+        // Handle null case: FirstOrDefault()?.Value ?? ""
+        // Since we can't use ?. in expression trees, we use a conditional
+        var nullCheck = Expression.Equal(firstOrDefaultCall, Expression.Constant(null, typeof(LangContentDto)));
+        var valueProperty = Expression.Property(firstOrDefaultCall, nameof(LangContentDto.Value));
+        var emptyString = Expression.Constant(string.Empty);
+
+        // condition ? "" : firstOrDefault.Value
+        var conditionalExpression = Expression.Condition(
+            nullCheck,
+            emptyString,
+            valueProperty);
+
+        return conditionalExpression;
+    }
+}
+

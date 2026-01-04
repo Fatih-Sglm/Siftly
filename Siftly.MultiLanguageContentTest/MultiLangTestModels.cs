@@ -20,8 +20,8 @@ public class Article
     public MultiLanguageContent Name { get; set; } = new();
     public MultiLanguageContent? Description { get; set; }
 
-    public ICollection<ArticleTag> Tags { get; set; } = new List<ArticleTag>();
-    public ICollection<ArticleTopic> ArticleTopics { get; set; } = new List<ArticleTopic>();
+    public ICollection<ArticleTag> Tags { get; set; } = [];
+    public ICollection<ArticleTopic> ArticleTopics { get; set; } = [];
 }
 
 public class ArticleTag
@@ -35,7 +35,7 @@ public class Topic
 {
     public int Id { get; set; }
     public MultiLanguageContent Title { get; set; } = new();
-    public ICollection<ArticleTopic> ArticleTopics { get; set; } = new List<ArticleTopic>();
+    public ICollection<ArticleTopic> ArticleTopics { get; set; } = [];
 }
 
 public class ArticleTopic
@@ -80,7 +80,7 @@ public class MultiLangDbContext(DbContextOptions<MultiLangDbContext> options) : 
         });
     }
 
-    private void ConfigureMultiLang(ModelBuilder modelBuilder, string propertyName, Type entityType)
+    private static void ConfigureMultiLang(ModelBuilder modelBuilder, string propertyName, Type entityType)
     {
         var entityBuilder = modelBuilder.Entity(entityType);
 

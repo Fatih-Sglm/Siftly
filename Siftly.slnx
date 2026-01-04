@@ -3,6 +3,7 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
     <File Path="nuget.config" />
+    <File Path="README.md" />
   </Folder>
   <Folder Name="/Test/">
     <Project Path="Siftly.IntegrationTest/Siftly.IntegrationTest.csproj" Id="89343675-fdc2-4ef9-998d-36fc9a45baa7" />

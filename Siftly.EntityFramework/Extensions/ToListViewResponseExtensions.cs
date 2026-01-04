@@ -36,7 +36,7 @@ public static class ToListViewResponseExtensions
         // 4. Materialize
         var listData = await finalQuery.ToListAsync<T>(cancellationToken);
 
-        return new ListViewResponse<T>(listData, totalCount ?? listData.Count, request.Skip, request.Take);
+        return new ListViewResponse<T>(listData, totalCount ?? listData.Count, request.PageNumber, request.PageSize);
     }
 
     /// <summary>
@@ -70,6 +70,6 @@ public static class ToListViewResponseExtensions
         // 4. Project and Materialize
         var listData = await sortedAndPagedQuery.Select(selector).Cast<TResult>().ToListAsync(cancellationToken);
 
-        return new ListViewResponse<TResult>(listData, totalCount ?? listData.Count, request.Skip, request.Take);
+        return new ListViewResponse<TResult>(listData, totalCount ?? listData.Count, request.PageNumber, request.PageSize);
     }
 }

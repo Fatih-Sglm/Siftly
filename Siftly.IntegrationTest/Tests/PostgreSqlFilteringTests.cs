@@ -342,8 +342,8 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         await using var context = fixture.CreateContext();
         var request = new QueryFilterRequest
         {
-            Skip = 2,
-            Take = 2,
+            PageNumber = 2,
+            PageSize = 2,
             Sort = [new SortDescriptor("Id", ListSortDirection.Ascending)]
         };
 
@@ -363,7 +363,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         var request = new QueryFilterRequest
         {
             IncludeCount = false,
-            Take = 5
+            PageSize = 5
         };
 
         // Act
@@ -390,7 +390,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         var request = new QueryFilterRequest
         {
             Cursor = new FilterCondition("Id", FilterOperator.IsGreaterThan, firstItem.Id),
-            Take = 5,
+            PageSize = 5,
             Sort = [new SortDescriptor("Id", ListSortDirection.Ascending)]
         };
 
