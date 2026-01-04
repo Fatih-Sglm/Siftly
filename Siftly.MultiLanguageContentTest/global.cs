@@ -1,0 +1,10 @@
+﻿global using FluentAssertions;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using Siftly.Core;
+global using Siftly.IntegrationTest;
+global using Siftly.MultiLanguageContentTest;
+global using System.Linq.Expressions;
+global using Testcontainers.PostgreSql;
+global using Xunit;
+global using Siftly.EntityFramework;

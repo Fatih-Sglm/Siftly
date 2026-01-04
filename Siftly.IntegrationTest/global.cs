@@ -1,0 +1,9 @@
+﻿global using EfCore.Querying.Tests.Integration.Entities;
+global using Microsoft.EntityFrameworkCore;
+global using Microsoft.Extensions.DependencyInjection;
+global using Siftly.IntegrationTest.Data;
+global using Xunit;
+global using EfCore.Querying.Tests.Integration.Fixtures;
+global using FluentAssertions;
+global using Siftly.Core;
+global using Siftly.EntityFramework;
