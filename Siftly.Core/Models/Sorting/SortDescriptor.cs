@@ -16,11 +16,6 @@ public class SortDescriptor
     public ListSortDirection Dir { get; set; } = ListSortDirection.Ascending;
 
     /// <summary>
-    /// Culture/Language code for multi-language field sorting (e.g., "tr", "en")
-    /// </summary>
-    public string? Culture { get; set; }
-
-    /// <summary>
     /// Default constructor
     /// </summary>
     public SortDescriptor() { }
