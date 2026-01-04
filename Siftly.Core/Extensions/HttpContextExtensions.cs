@@ -27,9 +27,14 @@ public static class HttpContextExtensions
         var request = new QueryFilterRequest
         {
             PageNumber = 0,
-            PageSize = defaultPageSize ?? QueryFilter.Options.MaxPageSize,
             IncludeCount = true
         };
+
+        // Apply default page size if provided
+        if (defaultPageSize.HasValue)
+        {
+            request.PageSize = defaultPageSize.Value;
+        }
 
         // PAGE SIZE (take or pageSize)
         if (query.TryGetValue("take", out var takeVal) && int.TryParse(takeVal, out var take) && take > 0)
