@@ -30,7 +30,7 @@ internal static class EnumParser
         if (span.Equals(FilterConstant.Operators.In.AsSpan(), StringComparison.OrdinalIgnoreCase)) return FilterOperator.In;
 
         // Fallback to standard enum name parsing
-        return Enum.TryParse<FilterOperator>(span.ToString(), true, out var result) ? result : FilterOperator.IsEqualTo;
+        return Enum.TryParse<FilterOperator>(span, true, out var result) ? result : FilterOperator.IsEqualTo;
     }
 
     public static ListSortDirection ParseDirection(ReadOnlySpan<char> span)
@@ -40,7 +40,7 @@ internal static class EnumParser
         if (span.Equals(FilterConstant.Directions.Asc.AsSpan(), StringComparison.OrdinalIgnoreCase)) return ListSortDirection.Ascending;
         if (span.Equals(FilterConstant.Directions.Desc.AsSpan(), StringComparison.OrdinalIgnoreCase)) return ListSortDirection.Descending;
 
-        return Enum.TryParse<ListSortDirection>(span.ToString(), true, out var result) ? result : ListSortDirection.Ascending;
+        return Enum.TryParse<ListSortDirection>(span, true, out var result) ? result : ListSortDirection.Ascending;
     }
 }
 
