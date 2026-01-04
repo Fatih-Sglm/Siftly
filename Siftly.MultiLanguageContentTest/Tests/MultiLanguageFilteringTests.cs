@@ -91,7 +91,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
             }
         };
 
-        var result = await _context.Articles.ApplyQueryFilterAsync(request);
+        var result = await _context.Articles.ToListViewResponseAsync(request);
         result.ListData.Should().ContainSingle().Which.Name.Content.Any(c => c.Value.StartsWith("EF Core")).Should().BeTrue();
     }
 
@@ -108,7 +108,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
             }
         };
 
-        var result = await _context.Articles.ApplyQueryFilterAsync(request);
+        var result = await _context.Articles.ToListViewResponseAsync(request);
         result.ListData.Should().ContainSingle().Which.Name.Content.Any(c => c.Value == "C# 14 Ön İzleme").Should().BeTrue();
     }
 
@@ -129,7 +129,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
             }
         };
 
-        var result = await _context.Articles.Include(a => a.Tags).ApplyQueryFilterAsync(request);
+        var result = await _context.Articles.Include(a => a.Tags).ToListViewResponseAsync(request);
         result.ListData.Should().ContainSingle().Which.Tags.Any(t => t.TagName.Content.Any(c => c.Value == "Programlama")).Should().BeTrue();
     }
 
@@ -146,7 +146,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
             }
         };
 
-        var result = await _context.Articles.ApplyQueryFilterAsync(request);
+        var result = await _context.Articles.ToListViewResponseAsync(request);
         result.ListData.Should().HaveCount(2);
     }
 
@@ -168,7 +168,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
             }
         };
 
-        var result = await _context.Articles.ApplyQueryFilterAsync(request);
+        var result = await _context.Articles.ToListViewResponseAsync(request);
         
         // Should find Article 1 ("EF Core 10 Features") in English
         result.ListData.Should().ContainSingle();
@@ -192,7 +192,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
             }
         };
 
-        var result = await _context.Articles.ApplyQueryFilterAsync(request);
+        var result = await _context.Articles.ToListViewResponseAsync(request);
         result.ListData.Should().ContainSingle();
     }
 
@@ -219,7 +219,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
 
         // 4. Uygulama
         var request = new QueryFilterRequest { Filter = specializedFilter };
-        var result = await _context.Articles.ApplyQueryFilterAsync(request);
+        var result = await _context.Articles.ToListViewResponseAsync(request);
 
         // Doğrulama
         specializedFilter.Should().BeOfType<MultiLangFilter>();

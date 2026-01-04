@@ -23,7 +23,7 @@ public class SqlServerCollectionFilteringTests(SqlServerFixture fixture) : IClas
         // Act
         var result = await context.Products
             .Include(p => p.Tags)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -44,7 +44,7 @@ public class SqlServerCollectionFilteringTests(SqlServerFixture fixture) : IClas
         // Act
         var result = await context.Products
             .Include(p => p.Tags)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -73,7 +73,7 @@ public class SqlServerCollectionFilteringTests(SqlServerFixture fixture) : IClas
         // Act
         var result = await context.Products
             .Include(p => p.Tags)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -102,7 +102,7 @@ public class SqlServerCollectionFilteringTests(SqlServerFixture fixture) : IClas
         var result = await context.Products
             .Include(p => p.ProductCategories)
                 .ThenInclude(pc => pc.Category)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -124,7 +124,7 @@ public class SqlServerCollectionFilteringTests(SqlServerFixture fixture) : IClas
         var result = await context.Products
             .Include(p => p.ProductCategories)
                 .ThenInclude(pc => pc.Category)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -155,7 +155,7 @@ public class SqlServerCollectionFilteringTests(SqlServerFixture fixture) : IClas
         var result = await context.Products
             .Include(p => p.ProductCategories)
                 .ThenInclude(pc => pc.Category)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -192,7 +192,7 @@ public class SqlServerCollectionFilteringTests(SqlServerFixture fixture) : IClas
         // Act
         var result = await context.Products
             .Include(p => p.Tags)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -225,7 +225,7 @@ public class PostgreSqlCollectionFilteringTests(PostgreSqlFixture fixture) : ICl
         // Act
         var result = await context.Products
             .Include(p => p.Tags)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -246,7 +246,7 @@ public class PostgreSqlCollectionFilteringTests(PostgreSqlFixture fixture) : ICl
         // Act
         var result = await context.Products
             .Include(p => p.Tags)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -272,7 +272,7 @@ public class PostgreSqlCollectionFilteringTests(PostgreSqlFixture fixture) : ICl
         var result = await context.Products
             .Include(p => p.ProductCategories)
                 .ThenInclude(pc => pc.Category)
-            .ApplyQueryFilterAsync(request);
+            .ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();

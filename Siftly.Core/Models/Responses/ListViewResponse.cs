@@ -12,7 +12,7 @@ public class ListViewResponse<T>
         TotalCount = 0;
     }
 
-    public ListViewResponse(List<T>? data, int? total = null, int skip = 0, int take = 20)
+    public ListViewResponse(List<T>? data, long? total = null, int skip = 0, int take = 20)
     {
         ListData = data ?? [];
         TotalCount = total ?? data?.Count ?? 0;
@@ -28,7 +28,7 @@ public class ListViewResponse<T>
     /// <summary>
     /// Total count of all items (before pagination)
     /// </summary>
-    public int? TotalCount { get; set; }
+    public long? TotalCount { get; set; }
 
     /// <summary>
     /// Number of items skipped
@@ -38,7 +38,7 @@ public class ListViewResponse<T>
     /// <summary>
     /// Number of items per page
     /// </summary>
-    public int Take { get; set; } = 20;
+    public int Take { get; set; }
 
     /// <summary>
     /// Current page number (1-based)

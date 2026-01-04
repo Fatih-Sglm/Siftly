@@ -1,40 +1,14 @@
 namespace Siftly.EntityFramework;
 
 /// <summary>
-/// Extension methods for applying QueryFilterRequest to IQueryable.
+/// Extension methods for applying QueryFilterRequest and dynamic LINQ operations to IQueryable.
 /// </summary>
 public static class QueryFilterExtensions
 {
-    /// <summary>
-    /// Apply complete query filter including filters, sorting, and pagination.
-    /// </summary>
-    public static async Task<ListViewResponse<T>> ApplyQueryFilterAsync<T>(
-        this IQueryable<T> query,
-        QueryFilterRequest request,
-        CancellationToken cancellationToken = default) where T : class, new()
-    {
-        var (filteredQuery, total) = await ApplyFilterAndCountInternalAsync(query, request, cancellationToken);
-        var data = await filteredQuery.ToListAsync(cancellationToken);
-        return new ListViewResponse<T>(data, total ?? data.Count, request.Skip, request.Take);
-    }
+    #region Generic Extensions (Typed)
 
     /// <summary>
-    /// Apply complete query filter with Select expression (executed in database).
-    /// </summary>
-    public static async Task<ListViewResponse<TResult>> ApplyQueryFilterAsync<TSource, TResult>(
-        this IQueryable<TSource> query,
-        QueryFilterRequest request,
-        Expression<Func<TSource, TResult>> selector,
-        CancellationToken cancellationToken = default) where TSource : class, new()
-    {
-        var (filteredQuery, total) = await ApplyFilterAndCountInternalAsync(query, request, cancellationToken);
-        var data = await filteredQuery.Select(selector).ToListAsync(cancellationToken);
-        return new ListViewResponse<TResult>(data, total ?? data.Count, request.Skip, request.Take);
-    }
-
-    /// <summary>
-    /// Apply query filter and return IQueryable without materializing results.
-    /// Useful when you need to further modify the query or use it with other operations.
+    /// Apply filters, sorting and pagination to the query.
     /// </summary>
     public static IQueryable<T> ApplyQueryFilter<T>(
         this IQueryable<T> query,
@@ -42,9 +16,22 @@ public static class QueryFilterExtensions
     {
         if (request == null) return query;
 
+        return query
+            .ApplyFilters(request)
+            .ApplySortingAndPagination(request);
+    }
+
+    /// <summary>
+    /// Apply filters and keyset cursor (if any) to the query.
+    /// </summary>
+    public static IQueryable<T> ApplyFilters<T>(
+        this IQueryable<T> query,
+        QueryFilterRequest request) where T : class, new()
+    {
+        if (request == null) return query;
         var options = QueryFilter.Options;
 
-        // 1. Apply Filters
+        // 1. Logic Filters
         if (request.Filter != null)
         {
             query = FilterExpressionBuilder.ApplyFilters(query, request.Filter, options);
@@ -62,144 +49,114 @@ public static class QueryFilterExtensions
                 query = query.Where(lambda);
             }
         }
-
-        // 3. Sorting
-        if (request.Sort != null && request.Sort.Count > 0)
-        {
-            query = SortingExpressionBuilder.ApplySorting(query, request.Sort);
-        }
-
-        // 4. Pagination
-        if (request.Cursor == null)
-        {
-            query = query.Skip(request.Skip);
-        }
-
-        var take = Math.Min(request.Take, options.MaxPageSize);
-        query = query.Take(take);
 
         return query;
     }
 
     /// <summary>
-    /// Apply query filter with projection and return IQueryable without materializing results.
+    /// Apply sorting and limit/offset pagination to the query.
     /// </summary>
-    public static IQueryable<TResult> ApplyQueryFilter<TSource, TResult>(
-        this IQueryable<TSource> query,
-        QueryFilterRequest request,
-        Expression<Func<TSource, TResult>> selector) where TSource : class, new()
+    public static IQueryable<T> ApplySortingAndPagination<T>(
+        this IQueryable<T> query,
+        QueryFilterRequest request) where T : class, new()
     {
-        if (request == null) return query.Select(selector);
-
+        if (request == null) return query;
         var options = QueryFilter.Options;
-
-        // 1. Apply Filters
-        if (request.Filter != null)
-        {
-            query = FilterExpressionBuilder.ApplyFilters(query, request.Filter, options);
-        }
-
-        // 2. Keyset Pagination (Cursor)
-        if (request.Cursor != null && !string.IsNullOrEmpty(request.Cursor.Field))
-        {
-            var parameter = Expression.Parameter(typeof(TSource), "c");
-            var cursorExpression = FilterExpressionBuilder.BuildConditionExpression<TSource>(request.Cursor, parameter, options);
-
-            if (cursorExpression != null)
-            {
-                var lambda = Expression.Lambda<Func<TSource, bool>>(cursorExpression, parameter);
-                query = query.Where(lambda);
-            }
-        }
 
         // 3. Sorting
         if (request.Sort != null && request.Sort.Count > 0)
         {
             query = SortingExpressionBuilder.ApplySorting(query, request.Sort);
         }
+        else
+        {
+            // Fallback sort for Split Query safety
+            query = query.OrderBy(x => 0);
+        }
 
-        // 4. Pagination
+        // 4. Pagination (Skip/Take)
         if (request.Cursor == null)
         {
             query = query.Skip(request.Skip);
         }
 
         var take = Math.Min(request.Take, options.MaxPageSize);
-        return query.Take(take).Select(selector);
+        return query.Take(take);
     }
+
+    #endregion
+
+    #region Non-Generic Extensions (Dynamic)
 
     /// <summary>
-    /// Apply query filter and return as IAsyncEnumerable for streaming results.
-    /// Ideal for processing large datasets without loading everything into memory.
+    /// Calls a Queryable method (Select, OrderBy, etc.) using reflection and expression trees.
     /// </summary>
-    public static IAsyncEnumerable<T> ApplyQueryFilterAsAsyncEnumerable<T>(
-        this IQueryable<T> query,
-        QueryFilterRequest request) where T : class, new()
+    private static IQueryable CallQueryableMethod(this IQueryable source, string methodName, LambdaExpression selector)
     {
-        return ApplyQueryFilter(query, request).AsAsyncEnumerable();
+        return source.Provider.CreateQuery(Expression.Call(
+            typeof(Queryable), 
+            methodName, 
+            [source.ElementType, selector.Body.Type], 
+            source.Expression, 
+            Expression.Quote(selector)));
     }
 
-    /// <summary>
-    /// Apply query filter with projection and return as IAsyncEnumerable for streaming results.
-    /// </summary>
-    public static IAsyncEnumerable<TResult> ApplyQueryFilterAsAsyncEnumerable<TSource, TResult>(
-        this IQueryable<TSource> query,
-        QueryFilterRequest request,
-        Expression<Func<TSource, TResult>> selector) where TSource : class, new()
+    public static IQueryable Page(this IQueryable source, int pageIndex, int pageSize)
     {
-        return ApplyQueryFilter(query, request, selector).AsAsyncEnumerable();
+        IQueryable query = source;
+        if (pageIndex > 0)
+        {
+            query = query.CallQueryableMethodWithInt("Skip", pageIndex * pageSize);
+        }
+        
+        if (pageSize > 0)
+        {
+            query = query.CallQueryableMethodWithInt("Take", pageSize);
+        }
+
+        return query;
     }
 
-    private static async Task<(IQueryable<T> Query, int? Total)> ApplyFilterAndCountInternalAsync<T>(
-        IQueryable<T> query,
-        QueryFilterRequest request,
-        CancellationToken cancellationToken) where T : class, new()
+    public static IQueryable Select(this IQueryable source, LambdaExpression selector)
     {
-        if (request == null) return (query, null);
-
-        var options = QueryFilter.Options;
-
-        // 1. Apply Filters
-        if (request.Filter != null)
-        {
-            query = FilterExpressionBuilder.ApplyFilters(query, request.Filter, options);
-        }
-
-        // 2. Keyset Pagination (Cursor)
-        if (request.Cursor != null && !string.IsNullOrEmpty(request.Cursor.Field))
-        {
-            var parameter = Expression.Parameter(typeof(T), "c");
-            var cursorExpression = FilterExpressionBuilder.BuildConditionExpression<T>(request.Cursor, parameter, options);
-
-            if (cursorExpression != null)
-            {
-                var lambda = Expression.Lambda<Func<T, bool>>(cursorExpression, parameter);
-                query = query.Where(lambda);
-            }
-        }
-
-        // 3. Count (Optional)
-        int? total = null;
-        if (request.IncludeCount)
-        {
-            total = await query.CountAsync(cancellationToken);
-        }
-
-        // 4. Sorting
-        if (request.Sort != null && request.Sort.Count > 0)
-        {
-            query = SortingExpressionBuilder.ApplySorting(query, request.Sort);
-        }
-
-        // 5. Pagination
-        if (request.Cursor == null)
-        {
-            query = query.Skip(request.Skip);
-        }
-
-        var take = Math.Min(request.Take, options.MaxPageSize);
-        query = query.Take(take);
-
-        return (query, total);
+        return source.CallQueryableMethod("Select", selector);
     }
+
+    public static IQueryable GroupBy(this IQueryable source, LambdaExpression keySelector)
+    {
+        return source.CallQueryableMethod("GroupBy", keySelector);
+    }
+
+    public static IQueryable OrderBy(this IQueryable source, LambdaExpression keySelector)
+    {
+        return source.CallQueryableMethod("OrderBy", keySelector);
+    }
+
+    public static IQueryable OrderByDescending(this IQueryable source, LambdaExpression keySelector)
+    {
+        return source.CallQueryableMethod("OrderByDescending", keySelector);
+    }
+
+    public static IQueryable OrderBy(this IQueryable source, LambdaExpression keySelector, ListSortDirection? sortDirection)
+    {
+        if (sortDirection.HasValue)
+        {
+            return sortDirection.Value == ListSortDirection.Ascending
+                ? source.OrderBy(keySelector)
+                : source.OrderByDescending(keySelector);
+        }
+        return source;
+    }
+
+    private static IQueryable CallQueryableMethodWithInt(this IQueryable source, string methodName, int value)
+    {
+        return source.Provider.CreateQuery(Expression.Call(
+            typeof(Queryable),
+            methodName,
+            [source.ElementType],
+            source.Expression,
+            Expression.Constant(value)));
+    }
+
+    #endregion
 }

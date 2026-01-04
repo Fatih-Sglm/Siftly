@@ -20,7 +20,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -38,7 +38,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -60,7 +60,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -78,7 +78,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -96,7 +96,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -118,7 +118,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -136,7 +136,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -158,7 +158,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -176,7 +176,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -206,7 +206,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -236,7 +236,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -272,7 +272,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -301,7 +301,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -323,7 +323,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -348,7 +348,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().HaveCount(2);
@@ -367,7 +367,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().HaveCount(5);
@@ -395,7 +395,7 @@ public class PostgreSqlFilteringTests(PostgreSqlFixture fixture) : IClassFixture
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();

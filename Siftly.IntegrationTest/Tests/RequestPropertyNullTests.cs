@@ -1,10 +1,4 @@
-using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
-using Siftly.Core;
-using Siftly.EntityFramework;
-using Xunit;
-
-namespace Siftly.MultiLanguageContentTest.Tests;
+namespace Siftly.IntegrationTest.Tests;
 
 // Basit test modeli
 public class SimpleEmployee
@@ -13,15 +7,14 @@ public class SimpleEmployee
     public string Name { get; set; } = null!;
 }
 
-public class SimpleDbContext : DbContext
+public class SimpleDbContext(DbContextOptions<SimpleDbContext> options) : DbContext(options)
 {
-    public SimpleDbContext(DbContextOptions<SimpleDbContext> options) : base(options) { }
     public DbSet<SimpleEmployee> Employees => Set<SimpleEmployee>();
 }
 
 public class RequestPropertyNullTests
 {
-    private async Task<SimpleDbContext> GetContext()
+    private static async Task<SimpleDbContext> GetContext()
     {
         var options = new DbContextOptionsBuilder<SimpleDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -56,7 +49,7 @@ public class RequestPropertyNullTests
         };
 
         // ACT
-        var result = await context.Employees.ApplyQueryFilterAsync(request);
+        var result = await context.Employees.ToListViewResponseAsync(request);
 
         // ASSERT
         result.Should().NotBeNull();
@@ -81,7 +74,7 @@ public class RequestPropertyNullTests
         };
 
         // ACT
-        var result = await context.Employees.ApplyQueryFilterAsync(request);
+        var result = await context.Employees.ToListViewResponseAsync(request);
 
         // ASSERT
         result.ListData.Should().HaveCount(5);

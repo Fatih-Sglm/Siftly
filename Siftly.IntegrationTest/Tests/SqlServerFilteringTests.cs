@@ -20,7 +20,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -38,7 +38,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -60,7 +60,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -78,7 +78,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -96,7 +96,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -118,7 +118,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -136,7 +136,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -158,7 +158,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -176,7 +176,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -206,7 +206,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -236,7 +236,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -262,7 +262,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();
@@ -286,7 +286,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().HaveCount(2);
@@ -343,7 +343,7 @@ public class SqlServerFilteringTests(SqlServerFixture fixture) : IClassFixture<S
         };
 
         // Act
-        var result = await context.Products.ApplyQueryFilterAsync(request);
+        var result = await context.Products.ToListViewResponseAsync(request);
 
         // Assert
         result.ListData.Should().NotBeEmpty();

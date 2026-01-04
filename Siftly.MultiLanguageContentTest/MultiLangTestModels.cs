@@ -20,8 +20,8 @@ public class Article
     public MultiLanguageContent Name { get; set; } = new();
     public MultiLanguageContent? Description { get; set; }
 
-    public ICollection<ArticleTag> Tags { get; set; } = [];
-    public ICollection<ArticleTopic> ArticleTopics { get; set; } = [];
+    public ICollection<ArticleTag> Tags { get; set; } = new List<ArticleTag>();
+    public ICollection<ArticleTopic> ArticleTopics { get; set; } = new List<ArticleTopic>();
 }
 
 public class ArticleTag
@@ -35,7 +35,7 @@ public class Topic
 {
     public int Id { get; set; }
     public MultiLanguageContent Title { get; set; } = new();
-    public ICollection<ArticleTopic> ArticleTopics { get; set; } = [];
+    public ICollection<ArticleTopic> ArticleTopics { get; set; } = new List<ArticleTopic>();
 }
 
 public class ArticleTopic
@@ -85,38 +85,25 @@ public class MultiLangDbContext(DbContextOptions<MultiLangDbContext> options) : 
         var entityBuilder = modelBuilder.Entity(entityType);
 
 #if NET10_0_OR_GREATER
-        // EF Core 10+ - Use ComplexProperty with OwnsMany for nested collection
-        var method = typeof(MultiLangDbContext).GetMethod(nameof(MapComplexProperty), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
-            ?.MakeGenericMethod(entityType);
-            
-        method?.Invoke(null, [modelBuilder, propertyName]);
-
-     static void MapComplexProperty<TEntity>(ModelBuilder modelBuilder, string propertyName) where TEntity : class
-    {
-        modelBuilder.Entity<TEntity>().ComplexProperty<MultiLanguageContent>(propertyName, cp =>
-        {
-            cp.ToJson();
-        });
-    }
+        // EF Core 10 - Use ComplexProperty
+        // Note: For primitive collections like List<DTO> to work as JSON, 
+        // EF 9+ handles it automatically via ComplexProperty.ToJson()
+        entityBuilder.ComplexProperty(propertyName, cp => cp.ToJson());
 #else
-        // EF Core 8/9 - Use OwnsOne
+        // EF Core 8 - Use OwnsOne (Stable for LTS)
         var method = typeof(MultiLangDbContext).GetMethod(nameof(MapOwnsOne), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
             ?.MakeGenericMethod(entityType);
 
         method?.Invoke(null, [modelBuilder, propertyName]);
-
-        static void MapOwnsOne<TEntity>(ModelBuilder modelBuilder, string propertyName) where TEntity : class
-        {
-            modelBuilder.Entity<TEntity>().OwnsOne<MultiLanguageContent>(propertyName, nav =>
-            {
-                nav.ToJson();
-                nav.OwnsMany(x => x.Content);
-            });
-        }
 #endif
     }
 
-
-
-
+    private static void MapOwnsOne<TEntity>(ModelBuilder modelBuilder, string propertyName) where TEntity : class
+    {
+        modelBuilder.Entity<TEntity>().OwnsOne<MultiLanguageContent>(propertyName, nav =>
+        {
+            nav.ToJson();
+            nav.OwnsMany(x => x.Content);
+        });
+    }
 }
