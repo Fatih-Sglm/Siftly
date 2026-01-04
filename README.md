@@ -14,14 +14,11 @@
 - ✅ **Multi-Target Support** - Compatible with .NET 8.0, .NET 9.0, and .NET 10.0
 - ✅ **Advanced Operators** - 17+ filter operators including string, numeric, and null checks
 - ✅ **Keyset Pagination** - Cursor-based pagination for efficient large dataset handling
+- ✅ **Case Sensitivity Control** - Toggle case-sensitive filtering per condition
 - ✅ **Composite Filters** - Support for AND/OR logic with nested conditions
 - ✅ **Sorting** - Multi-column sorting with ascending/descending order
 - ✅ **Custom Type Builders** - `ITypeExpressionBuilder<T>` for filtering and `ISortExpressionBuilder<T>` for sorting
-- ✅ **Multi-Language Support** - Built-in support for multilingual content with runtime culture selection
 - ✅ **HttpContext Extensions** - Easy query parameter parsing from HTTP requests
-- ✅ **Central Package Management** - Modern MSBuild package versioning
-- ✅ **Kendo UI Compatible** - Works seamlessly with Kendo UI DataSource
-
 ## 📦 Installation
 
 ### NuGet Package Manager
@@ -45,10 +42,11 @@ Siftly/
 ├── Siftly.Core/                          # Core filtering library
 │   ├── Configuration/                    # QueryFilter options and setup
 │   ├── Extensions/                       # Extension methods (HttpContext, etc.)
-│   ├── Infrastructure/Services/          # Filter and sorting expression builders
-│   ├── Interfaces/                       # ITypeExpressionBuilder, ISortExpressionBuilder
+│   ├── Infrastructure/                   # Expression builders and converters
+│   ├── Interfaces/Abstractions/          # ITypeExpressionBuilder, ISortExpressionBuilder
 │   └── Models/                           # Request/Response models
-│       ├── Filters/                      # FilterCondition, FilterOperator
+│       ├── Enums/                        # FilterOperator, ListSortDirection
+│       ├── Filters/                      # FilterCondition, FilterDescriptorBase
 │       ├── Sorting/                      # SortDescriptor
 │       ├── Requests/                     # QueryFilterRequest
 │       └── Responses/                    # ListViewResponse
@@ -56,7 +54,7 @@ Siftly/
 │   └── Extensions/                       # QueryFilterExtensions, ToListViewResponseExtensions
 └── Tests/                                # Test projects
     ├── Siftly.IntegrationTest/          # Integration tests (SQL Server, PostgreSQL, InMemory)
-    └── Siftly.MultiLanguageContentTest/ # Multi-language support tests
+    └── Siftly.MultiLanguageContentTest/ # Examples for multi-language support
 ```
 
 ## 🎯 Quick Start
@@ -70,8 +68,9 @@ using Siftly.Core;
 builder.Services.AddQueryFilter(options =>
 {
     options.MaxPageSize = 100;
+    options.DefaultPageSize = 25;
     
-    // Register custom type builders (optional)
+    // Register custom type builders for complex types (e.g., JSON content)
     options.RegisterTypeBuilder(new MultiLanguageExpressionBuilder());
     options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("tr"));
 });
@@ -89,6 +88,7 @@ public class ProductService
 
     public async Task<ListViewResponse<Product>> GetProducts(QueryFilterRequest request)
     {
+        // Automatically applies filtering, sorting, and 1-based pagination
         return await _context.Products.ToListViewResponseAsync(request);
     }
 }
@@ -135,8 +135,8 @@ var query = _context.Products.ApplyQueryFilter(request);
 ```csharp
 public class QueryFilterRequest
 {
+    public int Page { get; set; } = 1;             // Page number (1-based)
     public int PageSize { get; set; } = 20;        // Items per page
-    public int PageNumber { get; set; } = 0;       // Page offset (0-based)
     public List<SortDescriptor>? Sort { get; set; } 
     public FilterCondition? Filter { get; set; }
     public FilterCondition? Cursor { get; set; }   // For keyset pagination
@@ -146,20 +146,21 @@ public class QueryFilterRequest
 
 ### JSON Request Examples
 
-#### Simple Filter
+#### Simple Filter with Case Sensitivity
 
 ```json
 {
   "filter": {
     "field": "Name",
     "operator": "Contains",
-    "value": "Laptop"
+    "value": "Laptop",
+    "caseSensitiveFilter": false
   },
   "sort": [
     { "field": "Price", "dir": "Desc" }
   ],
-  "pageSize": 20,
-  "pageNumber": 0
+  "page": 1,
+  "pageSize": 20
 }
 ```
 
@@ -222,7 +223,8 @@ public async Task<ActionResult<ListViewResponse<Product>>> Get()
 
 Supported query parameters:
 - `pageSize` or `take` - Items per page
-- `pageNumber` or `skip` - Page offset
+- `page` or `pageNumber` - Page number (1-based)
+- `skip` - Offset-based paging (automatically converted to 1-based `Page`)
 - `sort` - JSON array or `field:dir` format
 - `filter` - JSON filter object
 - `includeCount` - Whether to include total count
@@ -234,15 +236,17 @@ Supported query parameters:
 public async Task<ActionResult<ListViewResponse<ProductDto>>> Query()
 {
     var request = await HttpContext.GetQueryFilterFromBodyAsync();
-    return Ok(await _service.GetProductsAsync(request));
+    return Ok(await _service.GetProductsAsync(request!));
 }
 ```
 
 ## 🌍 Multi-Language Content Support
 
-Siftly provides custom expression builders for multi-language content stored as JSON.
+Siftly allows you to extend filtering and sorting for complex types like multi-language JSON content.
 
-### Custom Filter and Sort Descriptors
+### Using Specialized Descriptors
+
+By inheriting from `FilterCondition` or `SortDescriptor`, you can pass additional metadata (like `LanguageCode`) to your custom builders.
 
 ```csharp
 // Filter with specific language
@@ -251,7 +255,7 @@ var filter = new MultiLangFilter
     Field = "Name",
     Operator = FilterOperator.Contains,
     Value = "Laptop",
-    LanguageCode = "tr"  // Filter by Turkish content
+    LanguageCode = "tr"
 };
 
 // Sort with specific language
@@ -259,8 +263,23 @@ var sort = new MultiLangSortDescriptor
 {
     Field = "Name",
     Dir = ListSortDirection.Ascending,
-    LanguageCode = "en"  // Sort by English content
+    LanguageCode = "en"
 };
+```
+
+### Specializing Filters
+
+If you receive a standard `QueryFilterRequest` (e.g., from a JSON body or query string) but want to apply a specialized filter logic, you can use the `SpecializeFilter<T>` extension.
+
+```csharp
+[HttpPost]
+public async Task<IActionResult> GetProducts([FromBody] QueryFilterRequest request)
+{
+    // Convert the standard FilterCondition tree into MultiLangFilter nodes
+    request.SpecializeFilter<MultiLangFilter>(f => f.LanguageCode = "tr");
+    
+    return Ok(await _service.GetProductsAsync(request));
+}
 ```
 
 ### Register Custom Builders
@@ -272,32 +291,24 @@ services.AddQueryFilter(options =>
     options.RegisterTypeBuilder(new MultiLanguageExpressionBuilder());
     
     // For sorting MultiLanguageContent (with default fallback language)
-    options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("tr"));
+    options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("en"));
 });
 ```
 
-### Implementing Custom Builders
+### Implementation Example
 
 ```csharp
-// Filter builder
-public class MultiLanguageExpressionBuilder : ITypeExpressionBuilder<MultiLanguageContent>
-{
-    public Expression? BuildExpression(Expression propertyAccess, FilterCondition condition)
-    {
-        string? languageCode = condition is MultiLangFilter mlf ? mlf.LanguageCode : null;
-        // Build expression for filtering by specific language...
-    }
-}
-
-// Sort builder
-public class MultiLanguageSortExpressionBuilder : ISortExpressionBuilder<MultiLanguageContent>
+public class MultiLanguageSortExpressionBuilder(string defaultLanguage = "en") 
+    : ISortExpressionBuilder<MultiLanguageContent>
 {
     public Expression? BuildSortExpression(Expression propertyAccess, SortDescriptor sortDescriptor)
     {
         string languageCode = sortDescriptor is MultiLangSortDescriptor mlsd 
             ? mlsd.LanguageCode 
-            : _defaultLanguage;
-        // Build expression for sorting by specific language...
+            : defaultLanguage;
+
+        // Custom logic to select the correct language from a JSON collection
+        // ... (See Siftly.MultiLanguageContentTest for full implementation)
     }
 }
 ```
@@ -309,40 +320,19 @@ public class MultiLanguageSortExpressionBuilder : ISortExpressionBuilder<MultiLa
 dotnet test
 
 # Integration tests (SQL Server, PostgreSQL, InMemory)
-dotnet test Siftly.IntegrationTest/Siftly.IntegrationTest.csproj
+dotnet test Tests/Siftly.IntegrationTest/Siftly.IntegrationTest.csproj
 
 # Multi-language content tests
-dotnet test Siftly.MultiLanguageContentTest/Siftly.MultiLanguageContentTest.csproj
-
-# Specific framework
-dotnet test --framework net8.0
+dotnet test Tests/Siftly.MultiLanguageContentTest/Siftly.MultiLanguageContentTest.csproj
 ```
 
 ## 📖 Entity Framework Core Version Support
 
 | Target Framework | EF Core Version |
 |-----------------|----------------|
-| .NET 8.0        | 8.0.22         |
-| .NET 9.0        | 9.0.11         |
-| .NET 10.0       | 10.0.1         |
-
-## 🔧 Local Development
-
-Build and pack local NuGet packages:
-
-```bash
-./repack-local.ps1 -Version 1.0.0
-```
-
-This script:
-1. Builds release packages
-2. Clears NuGet cache
-3. Outputs packages to `./nupkgs`
-
-Then restore in your test project:
-```bash
-dotnet restore --force-evaluate
-```
+| .NET 8.0        | 8.0.x          |
+| .NET 9.0        | 9.0.x          |
+| .NET 10.0       | 10.0.x         |
 
 ## 🤝 Contributing
 
@@ -357,12 +347,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Inspired by Kendo UI DataSource filtering capabilities
-- Built with modern .NET best practices
-- Designed for high-performance query operations
 
 ---
 
