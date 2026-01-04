@@ -16,7 +16,7 @@ public static class HttpContextExtensions
     /// <summary>
     /// Extracts QueryFilterRequest from HttpContext query string (GET)
     /// </summary>
-    public static QueryFilterRequest GetQueryFilters(
+    public static QueryFilterRequest GetQueryFilter(
         this HttpContext httpContext,
         int? defaultPageSize = null,
         int? maxPageSize = null)

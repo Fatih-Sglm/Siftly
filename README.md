@@ -16,7 +16,9 @@
 - ✅ **Keyset Pagination** - Cursor-based pagination for efficient large dataset handling
 - ✅ **Composite Filters** - Support for AND/OR logic with nested conditions
 - ✅ **Sorting** - Multi-column sorting with ascending/descending order
-- ✅ **Extension Points** - Custom type expression builders for specialized scenarios
+- ✅ **Custom Type Builders** - `ITypeExpressionBuilder<T>` for filtering and `ISortExpressionBuilder<T>` for sorting
+- ✅ **Multi-Language Support** - Built-in support for multilingual content with runtime culture selection
+- ✅ **HttpContext Extensions** - Easy query parameter parsing from HTTP requests
 - ✅ **Central Package Management** - Modern MSBuild package versioning
 - ✅ **Kendo UI Compatible** - Works seamlessly with Kendo UI DataSource
 
@@ -41,21 +43,19 @@ Install-Package Siftly.EntityFramework
 ```
 Siftly/
 ├── Siftly.Core/                          # Core filtering library
-│   ├── Abstractions/                     # Interfaces and contracts
-│   ├── Builders/                         # Fluent API builders
-│   ├── Extensions/                       # Extension methods
-│   ├── Infrastructure/                   # Core services
-│   │   ├── Services/                     # Filter and sorting expression builders
-│   │   ├── Converters/                   # JSON converters
-│   │   └── Binders/                      # Model binders
+│   ├── Configuration/                    # QueryFilter options and setup
+│   ├── Extensions/                       # Extension methods (HttpContext, etc.)
+│   ├── Infrastructure/Services/          # Filter and sorting expression builders
+│   ├── Interfaces/                       # ITypeExpressionBuilder, ISortExpressionBuilder
 │   └── Models/                           # Request/Response models
-│       ├── Filters/                      # Filter models
-│       ├── Sorting/                      # Sort descriptors
-│       ├── Requests/                     # Query request models
-│       └── Responses/                    # Response models
+│       ├── Filters/                      # FilterCondition, FilterOperator
+│       ├── Sorting/                      # SortDescriptor
+│       ├── Requests/                     # QueryFilterRequest
+│       └── Responses/                    # ListViewResponse
 ├── Siftly.EntityFramework/               # EF Core integration
+│   └── Extensions/                       # QueryFilterExtensions, ToListViewResponseExtensions
 └── Tests/                                # Test projects
-    ├── Siftly.IntegrationTest/          # Integration tests
+    ├── Siftly.IntegrationTest/          # Integration tests (SQL Server, PostgreSQL, InMemory)
     └── Siftly.MultiLanguageContentTest/ # Multi-language support tests
 ```
 
@@ -70,11 +70,14 @@ using Siftly.Core;
 builder.Services.AddQueryFilter(options =>
 {
     options.MaxPageSize = 100;
-    options.DefaultPageSize = 20;
+    
+    // Register custom type builders (optional)
+    options.RegisterTypeBuilder(new MultiLanguageExpressionBuilder());
+    options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("tr"));
 });
 ```
 
-### 2. Basic Filtering
+### 2. Basic Usage - ToListViewResponseAsync
 
 ```csharp
 using Siftly.Core;
@@ -86,15 +89,64 @@ public class ProductService
 
     public async Task<ListViewResponse<Product>> GetProducts(QueryFilterRequest request)
     {
-        return await _context.Products
-            .ApplyQueryFilterAsync(request);
+        return await _context.Products.ToListViewResponseAsync(request);
     }
 }
 ```
 
-### 3. Filter Request Examples
+### 3. With Projection (Select)
 
-#### Simple Filter (Single Condition)
+```csharp
+public async Task<ListViewResponse<ProductDto>> GetProductsWithProjection(QueryFilterRequest request)
+{
+    return await _context.Products.ToListViewResponseAsync(
+        request,
+        p => new ProductDto
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Price = p.Price
+        });
+}
+```
+
+### 4. Modular Query Building
+
+For more control, use separate methods:
+
+```csharp
+// Step 1: Apply filters only (returns IQueryable)
+var filteredQuery = _context.Products.ApplyFilters(request);
+
+// Step 2: Apply sorting and pagination
+var pagedQuery = filteredQuery.ApplySortingAndPagination(request);
+
+// Step 3: Materialize
+var result = await pagedQuery.ToListAsync();
+
+// Or all-in-one (returns IQueryable):
+var query = _context.Products.ApplyQueryFilter(request);
+```
+
+## 📝 Request Model
+
+### QueryFilterRequest
+
+```csharp
+public class QueryFilterRequest
+{
+    public int PageSize { get; set; } = 20;        // Items per page
+    public int PageNumber { get; set; } = 0;       // Page offset (0-based)
+    public List<SortDescriptor>? Sort { get; set; } 
+    public FilterCondition? Filter { get; set; }
+    public FilterCondition? Cursor { get; set; }   // For keyset pagination
+    public bool IncludeCount { get; set; } = true;
+}
+```
+
+### JSON Request Examples
+
+#### Simple Filter
 
 ```json
 {
@@ -104,13 +156,10 @@ public class ProductService
     "value": "Laptop"
   },
   "sort": [
-    {
-      "field": "Price",
-      "dir": "Desc"
-    }
+    { "field": "Price", "dir": "Desc" }
   ],
-  "take": 20,
-  "skip": 0
+  "pageSize": 20,
+  "pageNumber": 0
 }
 ```
 
@@ -121,24 +170,12 @@ public class ProductService
   "filter": {
     "logic": "And",
     "filters": [
-      {
-        "field": "Category",
-        "operator": "IsEqualTo",
-        "value": "Electronics"
-      },
+      { "field": "Category", "operator": "IsEqualTo", "value": "Electronics" },
       {
         "logic": "Or",
         "filters": [
-          {
-            "field": "Price",
-            "operator": "IsLessThan",
-            "value": 1000
-          },
-          {
-            "field": "OnSale",
-            "operator": "IsEqualTo",
-            "value": true
-          }
+          { "field": "Price", "operator": "IsLessThan", "value": 1000 },
+          { "field": "OnSale", "operator": "IsEqualTo", "value": true }
         ]
       }
     ]
@@ -148,164 +185,137 @@ public class ProductService
 
 ## 📚 Filter Operators
 
-Siftly supports the following filter operators:
-
 ### Comparison Operators
-- `IsEqualTo` - Equal to
-- `IsNotEqualTo` - Not equal to
-- `IsLessThan` - Less than
-- `IsLessThanOrEqualTo` - Less than or equal to
-- `IsGreaterThan` - Greater than
-- `IsGreaterThanOrEqualTo` - Greater than or equal to
+- `IsEqualTo`, `IsNotEqualTo`
+- `IsLessThan`, `IsLessThanOrEqualTo`
+- `IsGreaterThan`, `IsGreaterThanOrEqualTo`
 
 ### String Operators
-- `StartsWith` - String starts with
-- `EndsWith` - String ends with
-- `Contains` - String contains
-- `DoesNotContain` - String does not contain
+- `StartsWith`, `EndsWith`, `Contains`, `DoesNotContain`
 
 ### Null/Empty Checks
-- `IsNull` - Value is null
-- `IsNotNull` - Value is not null
-- `IsEmpty` - String is empty
-- `IsNotEmpty` - String is not empty
-- `IsNullOrEmpty` - String is null or empty
-- `IsNotNullOrEmpty` - String is not null or empty
+- `IsNull`, `IsNotNull`
+- `IsEmpty`, `IsNotEmpty`
+- `IsNullOrEmpty`, `IsNotNullOrEmpty`
 
 ### Collection Operators
-- `In` - Value is in collection
-- `IsContainedIn` - Item is contained in collection
-
-## 🔧 Advanced Features
-
-### Projection (Select)
-
-```csharp
-public async Task<ListViewResponse<ProductDto>> GetProductsWithProjection(
-    QueryFilterRequest request)
-{
-    return await _context.Products
-        .ApplyQueryFilterAsync(
-            request,
-            p => new ProductDto
-            {
-                Id = p.Id,
-                Name = p.Name,
-                Price = p.Price
-            });
-}
-```
-
-### Keyset Pagination (Cursor-based)
-
-```csharp
-{
-  "cursor": {
-    "field": "Id",
-    "operator": "IsGreaterThan",
-    "value": 100
-  },
-  "sort": [
-    {
-      "field": "Id",
-      "dir": "Asc"
-    }
-  ],
-  "take": 20
-}
-```
-
-### Custom Type Expression Builders
-
-For complex scenarios like multi-language content or custom value objects:
-
-```csharp
-public class MultiLanguageExpressionBuilder : ITypeExpressionBuilder
-{
-    public bool CanHandle(Type propertyType)
-    {
-        return propertyType == typeof(MultiLanguageContent);
-    }
-
-    public Expression BuildExpression(
-        Expression property,
-        FilterOperator op,
-        object? value,
-        QueryFilterConfiguration options)
-    {
-        // Custom expression building logic
-    }
-}
-
-// Register in DI
-services.AddQueryFilter(options =>
-{
-    options.RegisterTypeExpressionBuilder<MultiLanguageExpressionBuilder>();
-});
-```
+- `In`, `IsContainedIn`
 
 ## 🎨 ASP.NET Core Integration
 
-### Controller Example
+### HttpContext Extensions
 
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class ProductsController : ControllerBase
-{
-    private readonly IProductService _service;
-
-    [HttpPost("query")]
-    public async Task<ActionResult<ListViewResponse<ProductDto>>> Query(
-        [FromBody] QueryFilterRequest request)
-    {
-        var result = await _service.GetProductsAsync(request);
-        return Ok(result);
-    }
-}
-```
-
-### Model Binding
-
-Siftly includes custom model binders for query parameters:
+Extract `QueryFilterRequest` from query string parameters:
 
 ```csharp
 [HttpGet]
-public async Task<ActionResult<ListViewResponse<Product>>> Get(
-    [FromQuery] QueryFilterRequest request)
+public async Task<ActionResult<ListViewResponse<Product>>> Get()
 {
-    // Automatically binds from query string
+    var request = HttpContext.GetQueryFilter(
+        defaultPageSize: 20,
+        maxPageSize: 100
+    );
+    
     return Ok(await _service.GetProductsAsync(request));
+}
+```
+
+Supported query parameters:
+- `pageSize` or `take` - Items per page
+- `pageNumber` or `skip` - Page offset
+- `sort` - JSON array or `field:dir` format
+- `filter` - JSON filter object
+- `includeCount` - Whether to include total count
+
+### From Request Body (POST)
+
+```csharp
+[HttpPost("query")]
+public async Task<ActionResult<ListViewResponse<ProductDto>>> Query()
+{
+    var request = await HttpContext.GetQueryFilterFromBodyAsync();
+    return Ok(await _service.GetProductsAsync(request));
+}
+```
+
+## 🌍 Multi-Language Content Support
+
+Siftly provides custom expression builders for multi-language content stored as JSON.
+
+### Custom Filter and Sort Descriptors
+
+```csharp
+// Filter with specific language
+var filter = new MultiLangFilter
+{
+    Field = "Name",
+    Operator = FilterOperator.Contains,
+    Value = "Laptop",
+    LanguageCode = "tr"  // Filter by Turkish content
+};
+
+// Sort with specific language
+var sort = new MultiLangSortDescriptor
+{
+    Field = "Name",
+    Dir = ListSortDirection.Ascending,
+    LanguageCode = "en"  // Sort by English content
+};
+```
+
+### Register Custom Builders
+
+```csharp
+services.AddQueryFilter(options =>
+{
+    // For filtering MultiLanguageContent
+    options.RegisterTypeBuilder(new MultiLanguageExpressionBuilder());
+    
+    // For sorting MultiLanguageContent (with default fallback language)
+    options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("tr"));
+});
+```
+
+### Implementing Custom Builders
+
+```csharp
+// Filter builder
+public class MultiLanguageExpressionBuilder : ITypeExpressionBuilder<MultiLanguageContent>
+{
+    public Expression? BuildExpression(Expression propertyAccess, FilterCondition condition)
+    {
+        string? languageCode = condition is MultiLangFilter mlf ? mlf.LanguageCode : null;
+        // Build expression for filtering by specific language...
+    }
+}
+
+// Sort builder
+public class MultiLanguageSortExpressionBuilder : ISortExpressionBuilder<MultiLanguageContent>
+{
+    public Expression? BuildSortExpression(Expression propertyAccess, SortDescriptor sortDescriptor)
+    {
+        string languageCode = sortDescriptor is MultiLangSortDescriptor mlsd 
+            ? mlsd.LanguageCode 
+            : _defaultLanguage;
+        // Build expression for sorting by specific language...
+    }
 }
 ```
 
 ## 🧪 Testing
 
-The project includes comprehensive test suites:
-
-### Integration Tests
 ```bash
+# Run all tests
+dotnet test
+
+# Integration tests (SQL Server, PostgreSQL, InMemory)
 dotnet test Siftly.IntegrationTest/Siftly.IntegrationTest.csproj
-```
 
-### Multi-Language Content Tests
-```bash
+# Multi-language content tests
 dotnet test Siftly.MultiLanguageContentTest/Siftly.MultiLanguageContentTest.csproj
-```
 
-## 🏗️ Build Configuration
-
-Siftly uses **Central Package Management** (CPM) for consistent package versioning across all projects:
-
-- `Directory.Build.props` - Shared MSBuild properties
-- `Directory.Packages.props` - Centralized package versions
-- Multi-target support: net8.0, net9.0, net10.0
-
-### Build the Solution
-
-```bash
-dotnet restore
-dotnet build
+# Specific framework
+dotnet test --framework net8.0
 ```
 
 ## 📖 Entity Framework Core Version Support
@@ -316,18 +326,22 @@ dotnet build
 | .NET 9.0        | 9.0.11         |
 | .NET 10.0       | 10.0.1         |
 
-## 🌍 Multi-Language Support
+## 🔧 Local Development
 
-Siftly includes built-in support for multi-language content through custom expression builders. Perfect for applications with localized data stored as JSON in the database.
+Build and pack local NuGet packages:
 
-```csharp
-public class MultiLanguageContent
-{
-    public List<LangContentDto> Content { get; set; } = [];
-}
+```bash
+./repack-local.ps1 -Version 1.0.0
+```
 
-// EF Core 10+ uses ComplexProperty
-// EF Core 8/9 uses OwnsOne with ToJson()
+This script:
+1. Builds release packages
+2. Clears NuGet cache
+3. Outputs packages to `./nupkgs`
+
+Then restore in your test project:
+```bash
+dotnet restore --force-evaluate
 ```
 
 ## 🤝 Contributing
@@ -349,10 +363,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Inspired by Kendo UI DataSource filtering capabilities
 - Built with modern .NET best practices
 - Designed for high-performance query operations
-
-## 📞 Support
-
-For issues, questions, or contributions, please open an issue on GitHub.
 
 ---
 
