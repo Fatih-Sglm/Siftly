@@ -1,4 +1,4 @@
-namespace EfCore.Querying.Tests.Integration.Fixtures;
+namespace Siftly.IntegrationTest.Fixtures;
 
 /// <summary>
 /// Base database fixture interface for test database management
@@ -410,6 +410,125 @@ public static class SeedDataHelper
             }
         };
         context.Orders.AddRange(orders);
+        await context.SaveChangesAsync();
+
+        // Events (for IFilterTransformable tests - CreatedOnTimestamp stored as Unix milliseconds)
+        var events = new[]
+        {
+            new Event
+            {
+                Id = 1,
+                Name = "Tech Conference 2024",
+                Description = "Annual technology conference",
+                // 2024-03-15 10:00:00 UTC = 1710500400000 ms
+                CreatedOnTimestamp = new DateTimeOffset(2024, 3, 15, 10, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                IsActive = true,
+                Location = "New York"
+            },
+            new Event
+            {
+                Id = 2,
+                Name = "Music Festival",
+                Description = "Summer music festival",
+                // 2024-06-20 14:00:00 UTC = 1718888400000 ms
+                CreatedOnTimestamp = new DateTimeOffset(2024, 6, 20, 14, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                IsActive = true,
+                Location = "Los Angeles"
+            },
+            new Event
+            {
+                Id = 3,
+                Name = "Art Exhibition",
+                Description = null,
+                // 2024-01-10 09:00:00 UTC = 1704877200000 ms
+                CreatedOnTimestamp = new DateTimeOffset(2024, 1, 10, 9, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                IsActive = false,
+                Location = "Paris"
+            },
+            new Event
+            {
+                Id = 4,
+                Name = "Sports Championship",
+                Description = "Regional sports event",
+                // 2024-09-05 16:00:00 UTC = 1725552000000 ms
+                CreatedOnTimestamp = new DateTimeOffset(2024, 9, 5, 16, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                IsActive = true,
+                Location = "London"
+            },
+            new Event
+            {
+                Id = 5,
+                Name = "Food Fair",
+                Description = "International food festival",
+                // 2024-03-15 12:00:00 UTC = exactly same date as Event 1, different time
+                CreatedOnTimestamp = new DateTimeOffset(2024, 3, 15, 12, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                IsActive = true,
+                Location = "Tokyo"
+            }
+        };
+        context.Events.AddRange(events);
+        await context.SaveChangesAsync();
+
+        // Bookings (for IFilterTransformable tests - builder pattern with DateTime and enum transforms)
+        var bookings = new[]
+        {
+            new Booking
+            {
+                Id = 1,
+                CustomerName = "Alice Johnson",
+                Notes = "VIP customer, prefer window seat",
+                // 2024-04-10 09:00:00 UTC
+                BookingDateTimestamp = new DateTimeOffset(2024, 4, 10, 9, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = BookingStatus.Confirmed,
+                TotalAmount = 250.00m,
+                IsConfirmed = true
+            },
+            new Booking
+            {
+                Id = 2,
+                CustomerName = "Bob Williams",
+                Notes = null,
+                // 2024-05-15 14:30:00 UTC
+                BookingDateTimestamp = new DateTimeOffset(2024, 5, 15, 14, 30, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = BookingStatus.Pending,
+                TotalAmount = 175.50m,
+                IsConfirmed = false
+            },
+            new Booking
+            {
+                Id = 3,
+                CustomerName = "Carol Davis",
+                Notes = "Anniversary celebration",
+                // 2024-06-20 19:00:00 UTC
+                BookingDateTimestamp = new DateTimeOffset(2024, 6, 20, 19, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = BookingStatus.Completed,
+                TotalAmount = 500.00m,
+                IsConfirmed = true
+            },
+            new Booking
+            {
+                Id = 4,
+                CustomerName = "David Brown",
+                Notes = "Cancelled due to weather",
+                // 2024-04-10 11:00:00 UTC - same date as booking 1
+                BookingDateTimestamp = new DateTimeOffset(2024, 4, 10, 11, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = BookingStatus.Cancelled,
+                TotalAmount = 125.00m,
+                IsConfirmed = false
+            },
+            new Booking
+            {
+                Id = 5,
+                CustomerName = "Eva Martinez",
+                Notes = "Group booking for 8 people",
+                // 2024-07-25 18:00:00 UTC
+                BookingDateTimestamp = new DateTimeOffset(2024, 7, 25, 18, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = BookingStatus.Confirmed,
+                TotalAmount = 800.00m,
+                IsConfirmed = true
+            }
+        };
+        context.Bookings.AddRange(bookings);
         await context.SaveChangesAsync();
     }
 }

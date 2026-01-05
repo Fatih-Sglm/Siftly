@@ -16,7 +16,7 @@ public static class ToListViewResponseExtensions
     {
         if (request == null)
         {
-            var data = await query.ToListAsync<T>(cancellationToken);
+            var data = await query.ToListAsync(cancellationToken);
             return new ListViewResponse<T>(data, data.Count, 0, data.Count);
         }
 
@@ -27,14 +27,14 @@ public static class ToListViewResponseExtensions
         long? totalCount = null;
         if (request.IncludeCount)
         {
-            totalCount = await filteredQuery.LongCountAsync<T>(cancellationToken);
+            totalCount = await filteredQuery.LongCountAsync(cancellationToken);
         }
 
         // 3. Apply Sorting and Pagination
         var finalQuery = filteredQuery.ApplySortingAndPagination(request);
 
         // 4. Materialize
-        var listData = await finalQuery.ToListAsync<T>(cancellationToken);
+        var listData = await finalQuery.ToListAsync(cancellationToken);
 
         return new ListViewResponse<T>(listData, totalCount ?? listData.Count, request.Offset, request.PageSize);
     }

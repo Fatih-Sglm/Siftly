@@ -1,4 +1,6 @@
-namespace EfCore.Querying.Tests.Integration.Tests;
+using Siftly.IntegrationTest.Fixtures;
+
+namespace Siftly.IntegrationTest.Tests;
 
 /// <summary>
 /// xUnit Collection Definition for SQL Server tests

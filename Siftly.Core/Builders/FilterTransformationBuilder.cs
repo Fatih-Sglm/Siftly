@@ -20,8 +20,12 @@ public class FilterTransformationBuilder
     }
 
     /// <summary>
-    /// Apply the defined transformations to a filter condition
+    /// Apply the defined transformations to a filter condition.
+    /// Returns the original condition in a list if no matching rule is found.
+    /// Returns transformed condition(s) if a rule matches.
     /// </summary>
+    /// <param name="condition">The condition to transform</param>
+    /// <returns>List of transformed conditions (or original if no rule matched)</returns>
     public List<FilterCondition> Transform(FilterCondition condition)
     {
         if (string.IsNullOrEmpty(condition.Field))
@@ -29,47 +33,78 @@ public class FilterTransformationBuilder
 
         foreach (var rule in _rules)
         {
-            if (condition.Field.Equals(rule.SourceField, StringComparison.OrdinalIgnoreCase))
-            {
-                // Apply value transformation first
-                if (rule.ValueTransformer != null)
-                    condition.Value = rule.ValueTransformer(condition.Value);
+            if (!condition.Field.Equals(rule.SourceField, StringComparison.OrdinalIgnoreCase))
+                continue;
 
-                // Apply transformation
-                if (rule.TargetFields.Count > 0)
+            // Apply value transformation first
+            var transformedValue = rule.ValueTransformer != null 
+                ? rule.ValueTransformer(condition.Value) 
+                : condition.Value;
+
+            // Apply field transformation
+            if (rule.TargetFields.Count > 0)
+            {
+                // Multiple target fields - return list with OR logic handled by parent
+                var results = new List<FilterCondition>();
+                foreach (var targetField in rule.TargetFields)
                 {
-                    // Multiple target fields (OR logic between them)
-                    var results = new List<FilterCondition>();
-                    foreach (var targetField in rule.TargetFields)
+                    results.Add(new FilterCondition
                     {
-                        results.Add(new FilterCondition
-                        {
-                            Field = targetField,
-                            Operator = condition.Operator,
-                            Value = condition.Value,
-                            CaseSensitiveFilter = condition.CaseSensitiveFilter
-                        });
-                    }
-                    return results;
+                        Field = targetField,
+                        Operator = condition.Operator,
+                        Value = transformedValue,
+                        CaseSensitiveFilter = condition.CaseSensitiveFilter
+                    });
                 }
-                else if (rule.IsCollectionFilter)
+                return results;
+            }
+            else if (rule.IsCollectionFilter)
+            {
+                // Collection filter (one-to-many)
+                return [new FilterCondition
                 {
-                    // Collection filter (one-to-many)
-                    condition.Field = $"_collection_:{rule.CollectionPath}:{rule.CollectionItemField}";
-                }
-                else if (rule.IsManyToManyFilter)
+                    Field = $"_collection_:{rule.CollectionPath}:{rule.CollectionItemField}",
+                    Operator = condition.Operator,
+                    Value = transformedValue,
+                    CaseSensitiveFilter = condition.CaseSensitiveFilter
+                }];
+            }
+            else if (rule.IsManyToManyFilter)
+            {
+                // Many-to-many filter with join entity
+                return [new FilterCondition
                 {
-                    // Many-to-many filter with join entity
-                    condition.Field = $"_m2m_:{rule.CollectionPath}:{rule.JoinNavigationProperty}:{rule.CollectionItemField}";
-                }
-                else if (!string.IsNullOrEmpty(rule.TargetField))
+                    Field = $"_m2m_:{rule.CollectionPath}:{rule.JoinNavigationProperty}:{rule.CollectionItemField}",
+                    Operator = condition.Operator,
+                    Value = transformedValue,
+                    CaseSensitiveFilter = condition.CaseSensitiveFilter
+                }];
+            }
+            else if (!string.IsNullOrEmpty(rule.TargetField))
+            {
+                // Single target field mapping
+                return [new FilterCondition
                 {
-                    // Single target field
-                    condition.Field = rule.TargetField;
-                }
+                    Field = rule.TargetField,
+                    Operator = condition.Operator,
+                    Value = transformedValue,
+                    CaseSensitiveFilter = condition.CaseSensitiveFilter
+                }];
+            }
+            else if (rule.ValueTransformer != null)
+            {
+                // Value-only transformation - same field, transformed value
+                return [new FilterCondition
+                {
+                    Field = condition.Field,
+                    Operator = condition.Operator,
+                    Value = transformedValue,
+                    CaseSensitiveFilter = condition.CaseSensitiveFilter
+                }];
             }
         }
 
+        // No matching rule - return original condition unchanged
         return [condition];
     }
 

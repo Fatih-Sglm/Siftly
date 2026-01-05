@@ -34,7 +34,7 @@ public static class FilterExpressionBuilder
 
         foreach (var condition in filter.Filters)
         {
-            Expression? conditionExpression;
+            Expression? conditionExpression = null;
 
             if (condition.Filters != null && condition.Filters.Count > 0)
             {
@@ -42,21 +42,31 @@ public static class FilterExpressionBuilder
             }
             else
             {
-                var transformedConditions = filterTransformable?.GetTransformedFilters(condition) ?? [condition];
+                // Get transformed conditions from IFilterTransformable
+                // Entity returns [condition] unchanged if no transformation needed
+                var transformedConditions = filterTransformable!.GetTransformedFilters(condition);
 
-                Expression? transformedExpression = null;
-                foreach (var transformedCondition in transformedConditions)
+                if (transformedConditions.Count == 1)
                 {
-                    var expr = BuildConditionExpression<T>(transformedCondition, parameter, options);
-                    if (expr != null)
-                    {
-                        transformedExpression = transformedExpression == null
-                            ? expr
-                            : Expression.AndAlso(transformedExpression, expr);
-                    }
+                    // Single condition (most common case)
+                    conditionExpression = BuildConditionExpression<T>(transformedConditions[0], parameter, options);
                 }
-
-                conditionExpression = transformedExpression;
+                else if (transformedConditions.Count > 1)
+                {
+                    // Multiple conditions - combine with OR (e.g., MapToMany)
+                    Expression? orExpression = null;
+                    foreach (var transformedCondition in transformedConditions)
+                    {
+                        var expr = BuildConditionExpression<T>(transformedCondition, parameter, options);
+                        if (expr != null)
+                        {
+                            orExpression = orExpression == null
+                                ? expr
+                                : Expression.OrElse(orExpression, expr);
+                        }
+                    }
+                    conditionExpression = orExpression;
+                }
             }
 
             if (conditionExpression == null)

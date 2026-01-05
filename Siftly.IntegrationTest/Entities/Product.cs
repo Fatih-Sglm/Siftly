@@ -1,4 +1,4 @@
-namespace EfCore.Querying.Tests.Integration.Entities;
+namespace Siftly.IntegrationTest.Entities;
 
 /// <summary>
 /// Test entity representing a product

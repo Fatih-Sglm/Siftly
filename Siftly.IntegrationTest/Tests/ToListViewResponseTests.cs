@@ -1,15 +1,26 @@
+using Siftly.IntegrationTest.Fixtures;
+
 namespace Siftly.IntegrationTest.Tests;
 
-[Collection("InMemory")]
-public class ToListViewResponseTests(InMemoryFixture fixture)
+/// <summary>
+/// Base tests for ToListViewResponse functionality.
+/// Shared between SQL Server, PostgreSQL, and InMemory.
+/// </summary>
+public abstract class ToListViewResponseTestsBase<TFixture> : IClassFixture<TFixture>
+    where TFixture : class, IDatabaseFixture
 {
-    private readonly InMemoryFixture _fixture = fixture;
+    protected readonly TFixture Fixture;
+
+    protected ToListViewResponseTestsBase(TFixture fixture)
+    {
+        Fixture = fixture;
+    }
 
     [Fact]
     public async Task ToListViewResponseAsync_ShouldReturnCorrectDataAndTotalCount()
     {
         // ARRANGE
-        using var context = _fixture.CreateContext();
+        await using var context = Fixture.CreateContext();
         var request = new QueryFilterRequest
         {
             IncludeCount = true,
@@ -30,7 +41,7 @@ public class ToListViewResponseTests(InMemoryFixture fixture)
     public async Task ToListViewResponseAsync_WithProjection_ShouldWorkCorrectly()
     {
         // ARRANGE
-        using var context = _fixture.CreateContext();
+        await using var context = Fixture.CreateContext();
         var request = new QueryFilterRequest
         {
             IncludeCount = true,
@@ -53,7 +64,7 @@ public class ToListViewResponseTests(InMemoryFixture fixture)
     public async Task ToListViewResponseAsync_WhenRequestIsNull_ShouldReturnAllData()
     {
         // ARRANGE
-        using var context = _fixture.CreateContext();
+        await using var context = Fixture.CreateContext();
 
         // ACT
         var result = await context.Products.ToListViewResponseAsync(null!);
@@ -67,7 +78,7 @@ public class ToListViewResponseTests(InMemoryFixture fixture)
     public async Task ToListViewResponseAsync_WithFilter_ShouldFilterCorrectly()
     {
         // ARRANGE
-        using var context = _fixture.CreateContext();
+        await using var context = Fixture.CreateContext();
         var request = new QueryFilterRequest
         {
             IncludeCount = true,
@@ -87,3 +98,24 @@ public class ToListViewResponseTests(InMemoryFixture fixture)
         result.TotalCount.Should().Be(9); // SeedData'da 9 aktif ürün var
     }
 }
+
+/// <summary>
+/// SQL Server ToListViewResponse tests
+/// </summary>
+[Collection("SqlServer")]
+public class SqlServerToListViewResponseTests(SqlServerFixture fixture) 
+    : ToListViewResponseTestsBase<SqlServerFixture>(fixture);
+
+/// <summary>
+/// PostgreSQL ToListViewResponse tests
+/// </summary>
+[Collection("PostgreSql")]
+public class PostgreSqlToListViewResponseTests(PostgreSqlFixture fixture) 
+    : ToListViewResponseTestsBase<PostgreSqlFixture>(fixture);
+
+/// <summary>
+/// InMemory ToListViewResponse tests
+/// </summary>
+[Collection("InMemory")]
+public class InMemoryToListViewResponseTests(InMemoryFixture fixture) 
+    : ToListViewResponseTestsBase<InMemoryFixture>(fixture);
