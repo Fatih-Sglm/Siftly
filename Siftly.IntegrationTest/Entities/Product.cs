@@ -21,9 +21,11 @@ public class Product
     public int? StockCount { get; set; }
     public ProductStatus Status { get; set; }
 
-    // Navigation properties for collection filtering tests
-    public ICollection<ProductTag> Tags { get; set; }
+    [FilterTransform("CategoryId", IsManyToMany = true, JoinProperty = "Category", ItemField = "Id")]
     public ICollection<ProductCategory> ProductCategories { get; set; }
+
+    [FilterTransform("HasPremiumTag", IsCollection = true, ItemField = "Name")]
+    public ICollection<ProductTag> Tags { get; set; }
 }
 
 /// <summary>

@@ -10,342 +10,172 @@
 
 - ✅ **Dynamic Filtering** - Build complex filters with multiple operators and conditions
 - ✅ **Type-Safe Queries** - Strongly-typed query building with compile-time safety
-- ✅ **EF Core Integration** - Seamless integration with Entity Framework Core (8.0, 9.0, 10.0+)
-- ✅ **Multi-Target Support** - Compatible with .NET 8.0, .NET 9.0, and .NET 10.0
-- ✅ **Advanced Operators** - 17+ filter operators including string, numeric, and null checks
+- ✅ **Filter Transformations** - Map API fields to complex DB paths via Attributes or Interfaces
+- ✅ **Automatic Collections** - Filter One-to-Many and Many-to-Many relationships automatically using dot notation
 - ✅ **Keyset Pagination** - Cursor-based pagination for efficient large dataset handling
-- ✅ **Case Sensitivity Control** - Toggle case-sensitive filtering per condition
 - ✅ **Composite Filters** - Support for AND/OR logic with nested conditions
-- ✅ **Sorting** - Multi-column sorting with ascending/descending order
-- ✅ **Custom Type Builders** - `ITypeExpressionBuilder<T>` for filtering and `ISortExpressionBuilder<T>` for sorting
-- ✅ **HttpContext Extensions** - Easy query parameter parsing from HTTP requests
-## 📦 Installation
+- ✅ **Custom Type Builders** - Specialized builders for complex types (JSON, Multi-language)
+- ✅ **HttpContext Extensions** - Zero-boilerplate query parameter parsing
 
-### NuGet Package Manager
+## 🧩 Filter Transformations
 
-```bash
-dotnet add package Siftly.Core
-dotnet add package Siftly.EntityFramework
-```
+Siftly provides two ways to transform simple API fields into complex database queries.
 
-### Package Manager Console
-
-```powershell
-Install-Package Siftly.Core
-Install-Package Siftly.EntityFramework
-```
-
-## 🏗️ Project Structure
-
-```
-Siftly/
-├── Siftly.Core/                          # Core filtering library
-│   ├── Configuration/                    # QueryFilter options and setup
-│   ├── Extensions/                       # Extension methods (HttpContext, etc.)
-│   ├── Infrastructure/                   # Expression builders and converters
-│   ├── Interfaces/Abstractions/          # ITypeExpressionBuilder, ISortExpressionBuilder
-│   └── Models/                           # Request/Response models
-│       ├── Enums/                        # FilterOperator, ListSortDirection
-│       ├── Filters/                      # FilterCondition, FilterDescriptorBase
-│       ├── Sorting/                      # SortDescriptor
-│       ├── Requests/                     # QueryFilterRequest
-│       └── Responses/                    # ListViewResponse
-├── Siftly.EntityFramework/               # EF Core integration
-│   └── Extensions/                       # QueryFilterExtensions, ToListViewResponseExtensions
-└── Tests/                                # Test projects
-    ├── Siftly.IntegrationTest/          # Integration tests (SQL Server, PostgreSQL, InMemory)
-    └── Siftly.MultiLanguageContentTest/ # Examples for multi-language support
-```
-
-## 🎯 Quick Start
-
-### 1. Configure Services
+### 1. Declarative Mode (Attribute-based)
+Perfect for simple mappings, field grouping, and value transformations without writing manual logic.
 
 ```csharp
-using Siftly.Core;
-
-// In Program.cs or Startup.cs
-builder.Services.AddQueryFilter(options =>
+public class Product
 {
-    options.MaxPageSize = 100;
-    options.DefaultPageSize = 25;
-    
-    // Register custom type builders for complex types (e.g., JSON content)
-    options.RegisterTypeBuilder(new MultiLanguageExpressionBuilder());
-    options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("tr"));
-});
+    public int Id { get; set; }
+
+    // Maps API "search" field to both Name and Description (OR logic applied automatically)
+    [FilterTransform("search")]
+    public string Name { get; set; }
+
+    [FilterTransform("search")]
+    public string Description { get; set; }
+
+    // Maps API "CategoryId" to a Many-to-Many relationship path
+    [FilterTransform("CategoryId", IsManyToMany = true, JoinProperty = "Category", ItemField = "Id")]
+    public ICollection<ProductCategory> ProductCategories { get; set; }
+
+    // Maps API string to Enum with a value transformer
+    [FilterTransform<StringToEnumTransformer<ProductStatus>>("Status")]
+    public ProductStatus Status { get; set; }
+}
 ```
 
-### 2. Basic Usage - ToListViewResponseAsync
+### 2. Explicit Mode (Interface-based)
+For scenarios requiring custom logic or runtime decisions, implement `IFilterTransformable`.
 
 ```csharp
-using Siftly.Core;
-using Siftly.EntityFramework;
-
-public class ProductService
+public class Order : IFilterTransformable
 {
-    private readonly DbContext _context;
+    public decimal TotalAmount { get; set; }
+    public DateTime OrderDate { get; set; }
 
-    public async Task<ListViewResponse<Product>> GetProducts(QueryFilterRequest request)
+    public List<FilterCondition> GetTransformedFilters(FilterCondition condition)
     {
-        // Automatically applies filtering, sorting, and 1-based pagination
-        return await _context.Products.ToListViewResponseAsync(request);
+        if (condition.Field == "isRecent")
+        {
+            // Custom transformation: "isRecent" -> "OrderDate > Last 7 Days"
+            return [new FilterCondition("OrderDate", FilterOperator.IsGreaterThan, DateTime.UtcNow.AddDays(-7))];
+        }
+        
+        // Return original condition in a list to use standard filtering or Attribute-based mappings
+        return [condition]; 
     }
 }
 ```
 
-### 3. With Projection (Select)
+## ⌨️ Keyset Pagination (Cursor)
 
-```csharp
-public async Task<ListViewResponse<ProductDto>> GetProductsWithProjection(QueryFilterRequest request)
+Use Cursor-based pagination for high-performance infinite scroll or large data navigation. It avoids the performance pitfalls of `Skip`/`Take` on large datasets.
+
+### Request Example (JSON):
+```json
 {
-    return await _context.Products.ToListViewResponseAsync(
-        request,
-        p => new ProductDto
-        {
-            Id = p.Id,
-            Name = p.Name,
-            Price = p.Price
-        });
+  "pageSize": 20,
+  "sort": [{ "field": "Id", "dir": "Asc" }],
+  "cursor": { "field": "Id", "operator": "gt", "value": 150 }
 }
 ```
 
-### 4. Modular Query Building
-
-For more control, use separate methods:
-
+### Server Side Usage:
 ```csharp
-// Step 1: Apply filters only (returns IQueryable)
-var filteredQuery = _context.Products.ApplyFilters(request);
-
-// Step 2: Apply sorting and pagination
-var pagedQuery = filteredQuery.ApplySortingAndPagination(request);
-
-// Step 3: Materialize
-var result = await pagedQuery.ToListAsync();
-
-// Or all-in-one (returns IQueryable):
-var query = _context.Products.ApplyQueryFilter(request);
+// The ApplyQueryFilter method handles Cursor, Sort, Filter, and Pagination automatically
+return await _context.Products.ToListViewResponseAsync(request);
 ```
 
-## 📝 Request Model
+## 🎯 Automatic Collection Filtering
 
-### QueryFilterRequest
+You don't need any configuration to filter collections if you use standard dot notation in your field names. Siftly detects the `IEnumerable` property in the path and automatically builds `Any()` expressions.
 
-```csharp
-public class QueryFilterRequest
-{
-    public int Page { get; set; } = 1;             // Page number (1-based)
-    public int PageSize { get; set; } = 20;        // Items per page
-    public List<SortDescriptor>? Sort { get; set; } 
-    public FilterCondition? Filter { get; set; }
-    public FilterCondition? Cursor { get; set; }   // For keyset pagination
-    public bool IncludeCount { get; set; } = true;
-}
-```
+- `Tags.Name` ➡️ `p.Tags.Any(t => t.Name == value)`
+- `ProductCategories.Category.Id` ➡️ `p.ProductCategories.Any(pc => pc.Category.Id == value)`
 
-### JSON Request Examples
-
-#### Simple Filter with Case Sensitivity
-
+### JSON Example:
 ```json
 {
   "filter": {
-    "field": "Name",
+    "field": "Tags.Name",
     "operator": "Contains",
-    "value": "Laptop",
-    "caseSensitiveFilter": false
-  },
-  "sort": [
-    { "field": "Price", "dir": "Desc" }
-  ],
-  "page": 1,
-  "pageSize": 20
-}
-```
-
-#### Composite Filter (AND/OR Logic)
-
-```json
-{
-  "filter": {
-    "logic": "And",
-    "filters": [
-      { "field": "Category", "operator": "IsEqualTo", "value": "Electronics" },
-      {
-        "logic": "Or",
-        "filters": [
-          { "field": "Price", "operator": "IsLessThan", "value": 1000 },
-          { "field": "OnSale", "operator": "IsEqualTo", "value": true }
-        ]
-      }
-    ]
+    "value": "Premium"
   }
 }
 ```
 
-## 📚 Filter Operators
+## 🛠️ Custom Type Builders
 
-### Comparison Operators
-- `IsEqualTo`, `IsNotEqualTo`
-- `IsLessThan`, `IsLessThanOrEqualTo`
-- `IsGreaterThan`, `IsGreaterThanOrEqualTo`
+Extend Siftly for complex types like Multi-language JSON or specialized fields using `ITypeExpressionBuilder` and `ISortExpressionBuilder`.
 
-### String Operators
-- `StartsWith`, `EndsWith`, `Contains`, `DoesNotContain`
-
-### Null/Empty Checks
-- `IsNull`, `IsNotNull`
-- `IsEmpty`, `IsNotEmpty`
-- `IsNullOrEmpty`, `IsNotNullOrEmpty`
-
-### Collection Operators
-- `In`, `IsContainedIn`
-
-## 🎨 ASP.NET Core Integration
-
-### HttpContext Extensions
-
-Extract `QueryFilterRequest` from query string parameters:
-
+### 1. Register Builders
 ```csharp
-[HttpGet]
-public async Task<ActionResult<ListViewResponse<Product>>> Get()
+builder.Services.AddQueryFilter(options =>
 {
-    var request = HttpContext.GetQueryFilter(
-        defaultPageSize: 20,
-        maxPageSize: 100
-    );
-    
-    return Ok(await _service.GetProductsAsync(request));
-}
-```
-
-Supported query parameters:
-- `pageSize` or `take` - Items per page
-- `page` or `pageNumber` - Page number (1-based)
-- `skip` - Offset-based paging (automatically converted to 1-based `Page`)
-- `sort` - JSON array or `field:dir` format
-- `filter` - JSON filter object
-- `includeCount` - Whether to include total count
-
-### From Request Body (POST)
-
-```csharp
-[HttpPost("query")]
-public async Task<ActionResult<ListViewResponse<ProductDto>>> Query()
-{
-    var request = await HttpContext.GetQueryFilterFromBodyAsync();
-    return Ok(await _service.GetProductsAsync(request!));
-}
-```
-
-
-Siftly allows you to extend filtering and sorting for complex types like multi-language JSON content.
-
-### Using Specialized Descriptors
-
-By inheriting from `FilterCondition` or `SortDescriptor`, you can pass additional metadata (like `LanguageCode`) to your custom builders.
-
-```csharp
-// Filter with specific language
-var filter = new MultiLangFilter
-{
-    Field = "Name",
-    Operator = FilterOperator.Contains,
-    Value = "Laptop",
-    LanguageCode = "tr"
-};
-
-// Sort with specific language
-var sort = new MultiLangSortDescriptor
-{
-    Field = "Name",
-    Dir = ListSortDirection.Ascending,
-    LanguageCode = "en"
-};
-```
-
-### Specializing Filters
-
-If you receive a standard `QueryFilterRequest` (e.g., from a JSON body or query string) but want to apply a specialized filter logic, you can use the `SpecializeFilter<T>` extension.
-
-```csharp
-[HttpPost]
-public async Task<IActionResult> GetProducts([FromBody] QueryFilterRequest request)
-{
-    // Convert the standard FilterCondition tree into MultiLangFilter nodes
-    request.SpecializeFilter<MultiLangFilter>(f => f.LanguageCode = "tr");
-    
-    return Ok(await _service.GetProductsAsync(request));
-}
-```
-
-### Register Custom Builders
-
-```csharp
-services.AddQueryFilter(options =>
-{
-    // For filtering MultiLanguageContent
+    // Custom builder for MultiLanguageContent type
     options.RegisterTypeBuilder(new MultiLanguageExpressionBuilder());
     
-    // For sorting MultiLanguageContent (with default fallback language)
+    // Custom sorter for MultiLanguageContent (default to 'en')
     options.RegisterSortBuilder(new MultiLanguageSortExpressionBuilder("en"));
 });
 ```
 
-### Implementation Example
-
+### 2. Implementation Example
 ```csharp
-public class MultiLanguageSortExpressionBuilder(string defaultLanguage = "en") 
-    : ISortExpressionBuilder<MultiLanguageContent>
+public class MultiLanguageExpressionBuilder : ITypeExpressionBuilder<MultiLanguageContent>
 {
-    public Expression? BuildSortExpression(Expression propertyAccess, SortDescriptor sortDescriptor)
+    public Expression BuildExpression(Expression propertyAccess, FilterCondition condition)
     {
-        string languageCode = sortDescriptor is MultiLangSortDescriptor mlsd 
-            ? mlsd.LanguageCode 
-            : defaultLanguage;
-
-        // Custom logic to select the correct language from a JSON collection
-        // ... (See Siftly.MultiLanguageContentTest for full implementation)
+        // Custom logic to build an expression that queries JSON property
+        // e.g. x.Name.Translations.Any(t => t.Lang == "en" && t.Value.Contains("search"))
+        return MyExpressionHelper.BuildJsonSearch(propertyAccess, condition);
     }
 }
 ```
 
-## 🧪 Testing
+## 🎨 ASP.NET Core Integration
 
-```bash
-# Run all tests
-dotnet test
-
-# Integration tests (SQL Server, PostgreSQL, InMemory)
-dotnet test Tests/Siftly.IntegrationTest/Siftly.IntegrationTest.csproj
-
-# Multi-language content tests
-dotnet test Tests/Siftly.MultiLanguageContentTest/Siftly.MultiLanguageContentTest.csproj
+### 1. Configure Services
+```csharp
+builder.Services.AddQueryFilter(options =>
+{
+    options.DefaultPageSize = 25;
+    options.MaxPageSize = 100;
+});
 ```
 
-## 📖 Entity Framework Core Version Support
+### 2. Zero-Boilerplate Controller
+```csharp
+[HttpGet]
+public async Task<ActionResult<ListViewResponse<Product>>> Get()
+{
+    // Automatically parses query strings: ?filter={"field":"Name","operator":"eq","value":"X"}&sort=Price:desc
+    var request = HttpContext.GetQueryFilter();
+    return Ok(await _context.Products.ToListViewResponseAsync(request));
+}
+```
 
-| Target Framework | EF Core Version |
-|-----------------|----------------|
-| .NET 8.0        | 8.0.x          |
-| .NET 9.0        | 9.0.x          |
-| .NET 10.0       | 10.0.x         |
+## 📚 Filter Operators Reference
+
+- **Equality**: `eq` (IsEqualTo), `neq` (IsNotEqualTo)
+- **Comparison**: `lt`, `lte`, `gt`, `gte`
+- **String**: `startswith`, `endswith`, `contains`, `doesnotcontain`
+- **Null/Empty**: `isnull`, `isnotnull`, `isempty`, `isnotempty`, `isnullorempty`, `isnotnullorempty`
+- **Collection**: `in`, `containedin`
+
+## 📖 EF Core Version Support
+
+| .NET Version | EF Core Version |
+| :--- | :--- |
+| .NET 8.0 | 8.0.x |
+| .NET 9.0 | 9.0.x |
+| .NET 10.0 | 10.0.x |
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 

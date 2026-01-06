@@ -13,6 +13,7 @@ public class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<Event> Events => Set<Event>();
     public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<Reservation> Reservations => Set<Reservation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -104,6 +105,18 @@ public class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(
             entity.Property(e => e.CustomerName).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Notes).HasMaxLength(1000);
             entity.Property(e => e.TotalAmount).HasPrecision(18, 2);
+            entity.Property(e => e.Status).HasConversion<int>();
+        });
+
+        // Reservation configuration (for IFilterTransformable tests - attribute pattern)
+        modelBuilder.Entity<Reservation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.GuestName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.RoomNumber).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+            entity.Property(e => e.TotalPrice).HasPrecision(18, 2);
             entity.Property(e => e.Status).HasConversion<int>();
         });
     }

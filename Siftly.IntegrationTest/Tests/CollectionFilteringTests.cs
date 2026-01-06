@@ -25,7 +25,7 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
         await using var context = Fixture.CreateContext();
         var request = new QueryFilterRequest
         {
-            Filter = new FilterCondition("_collection_:Tags:Name", FilterOperator.Contains, "Apple")
+            Filter = new FilterCondition("Tags.Name", FilterOperator.Contains, "Apple")
         };
 
         // Act
@@ -46,7 +46,7 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
         await using var context = Fixture.CreateContext();
         var request = new QueryFilterRequest
         {
-            Filter = new FilterCondition("_collection_:Tags:Name", FilterOperator.IsEqualTo, "Premium")
+            Filter = new FilterCondition("Tags.Name", FilterOperator.IsEqualTo, "Premium")
         };
 
         // Act
@@ -73,7 +73,7 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
                 Filters =
                 [
                     new FilterCondition("IsActive", FilterOperator.IsEqualTo, true),
-                    new FilterCondition("_collection_:Tags:Name", FilterOperator.Contains, "Smartphone")
+                    new FilterCondition("Tags.Name", FilterOperator.Contains, "Smartphone")
                 ]
             }
         };
@@ -103,7 +103,7 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
         await using var context = Fixture.CreateContext();
         var request = new QueryFilterRequest
         {
-            Filter = new FilterCondition("_m2m_:ProductCategories:Category:Name", FilterOperator.IsEqualTo, "Electronics")
+            Filter = new FilterCondition("ProductCategories.Category.Name", FilterOperator.IsEqualTo, "Electronics")
         };
 
         // Act
@@ -125,7 +125,7 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
         await using var context = Fixture.CreateContext();
         var request = new QueryFilterRequest
         {
-            Filter = new FilterCondition("_m2m_:ProductCategories:Category:Name", FilterOperator.Contains, "Sport")
+            Filter = new FilterCondition("ProductCategories.Category.Name", FilterOperator.Contains, "Sport")
         };
 
         // Act
@@ -154,7 +154,7 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
                 [
                     new FilterCondition("IsActive", FilterOperator.IsEqualTo, true),
                     new FilterCondition("Price", FilterOperator.IsGreaterThan, 100m),
-                    new FilterCondition("_m2m_:ProductCategories:Category:Name", FilterOperator.IsEqualTo, "Electronics")
+                    new FilterCondition("ProductCategories.Category.Name", FilterOperator.IsEqualTo, "Electronics")
                 ]
             }
         };
@@ -191,8 +191,8 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
                 Logic = FilterConstant.Or,
                 Filters =
                 [
-                    new FilterCondition("_collection_:Tags:Name", FilterOperator.IsEqualTo, "Apple"),
-                    new FilterCondition("_collection_:Tags:Name", FilterOperator.IsEqualTo, "Samsung")
+                    new FilterCondition("Tags.Name", FilterOperator.IsEqualTo, "Apple"),
+                    new FilterCondition("Tags.Name", FilterOperator.IsEqualTo, "Samsung")
                 ]
             }
         };

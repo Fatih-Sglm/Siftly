@@ -530,5 +530,48 @@ public static class SeedDataHelper
         };
         context.Bookings.AddRange(bookings);
         await context.SaveChangesAsync();
+
+        // Reservations (for attribute-based transformation tests)
+        var reservations = new[]
+        {
+            new Reservation
+            {
+                Id = 1,
+                GuestName = "John Smith",
+                Notes = "Late check-in requested",
+                RoomNumber = "101",
+                // 2024-08-10 10:00:00 UTC
+                ReservationDateTimestamp = new DateTimeOffset(2024, 8, 10, 10, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = ReservationStatus.Confirmed,
+                TotalPrice = 150.00m,
+                NumberOfGuests = 2
+            },
+            new Reservation
+            {
+                Id = 2,
+                GuestName = "Jane Doe",
+                Notes = "First time guest",
+                RoomNumber = "102",
+                // 2024-08-12 14:00:00 UTC
+                ReservationDateTimestamp = new DateTimeOffset(2024, 8, 12, 14, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = ReservationStatus.Pending,
+                TotalPrice = 300.00m,
+                NumberOfGuests = 3
+            },
+            new Reservation
+            {
+                Id = 3,
+                GuestName = "Michael Brown",
+                Notes = null,
+                RoomNumber = "201",
+                // 2024-08-15 09:30:00 UTC
+                ReservationDateTimestamp = new DateTimeOffset(2024, 8, 15, 9, 30, 0, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Status = ReservationStatus.CheckedIn,
+                TotalPrice = 450.00m,
+                NumberOfGuests = 1
+            }
+        };
+        context.Reservations.AddRange(reservations);
+        await context.SaveChangesAsync();
     }
 }

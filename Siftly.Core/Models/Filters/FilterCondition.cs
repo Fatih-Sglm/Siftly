@@ -46,4 +46,21 @@ public class FilterCondition : FilterDescriptorBase
         Operator = filterOperator;
         Value = value;
     }
+
+    // Flag-based collection filtering support (Internal use or IFilterTransformable only)
+    [JsonIgnore]
+    [BindNever]
+    public bool IsCollection { get; set; }
+
+    [JsonIgnore]
+    [BindNever]
+    public bool IsManyToMany { get; set; }
+
+    [JsonIgnore]
+    [BindNever]
+    public string? ItemField { get; set; }
+
+    [JsonIgnore]
+    [BindNever]
+    public string? JoinNavigationProperty { get; set; }
 }

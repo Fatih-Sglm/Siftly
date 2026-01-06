@@ -40,10 +40,4 @@ public static class FilterConstant
         public const string Asc = "asc";
         public const string Desc = "desc";
     }
-
-    public static class Prefixes
-    {
-        public const string Collection = "_collection_:";
-        public const string ManyToMany = "_m2m_:";
-    }
 }

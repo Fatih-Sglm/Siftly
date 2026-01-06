@@ -20,17 +20,55 @@ public static class FilterExpressionBuilder
 
     public static Expression? BuildFilterExpression<T>(FilterCondition filter, ParameterExpression parameter, QueryFilterOptions options) where T : class, new()
     {
+        var filterTransformable = typeof(IFilterTransformable).IsAssignableFrom(typeof(T))
+            ? Activator.CreateInstance<T>() as IFilterTransformable
+            : null;
+
+        // Unified transformation logic: 
+        // 1. If interface exists, try it first.
+        // 2. If interface is missing OR it returns the original condition (unmodified), 
+        //    fallback to automatic FilterTransform attributes.
+        Func<FilterCondition, List<FilterCondition>> transformFunc = (cond) =>
+        {
+            if (filterTransformable != null)
+            {
+                var result = filterTransformable.GetTransformedFilters(cond);
+                
+                // If the interface returned something different than original 
+                // OR it returned multiple conditions, it means it handled the transformation.
+                if (result.Count > 1 || (result.Count == 1 && (result[0].Field != cond.Field || result[0].Value != cond.Value)))
+                {
+                    return result;
+                }
+            }
+            
+            return FilterTransformAttributeHelper.GetTransformedFilters<T>(cond);
+        };
+
         if (filter.Filters == null || filter.Filters.Count == 0)
         {
-            return BuildConditionExpression<T>(filter, parameter, options);
+            var transformed = transformFunc(filter);
+            
+            if (transformed.Count == 1)
+                return BuildConditionExpression<T>(transformed[0], parameter, options);
+            
+            if (transformed.Count > 1)
+            {
+                Expression? orExpr = null;
+                foreach (var cond in transformed)
+                {
+                    var expr = BuildConditionExpression<T>(cond, parameter, options);
+                    if (expr != null)
+                        orExpr = orExpr == null ? expr : Expression.OrElse(orExpr, expr);
+                }
+                return orExpr;
+            }
+            
+            return null;
         }
 
         Expression? combinedExpression = null;
         var isAndLogic = (filter.Logic ?? FilterConstant.And).Equals(FilterConstant.And, StringComparison.OrdinalIgnoreCase);
-
-        var filterTransformable = typeof(IFilterTransformable).IsAssignableFrom(typeof(T))
-            ? Activator.CreateInstance<T>() as IFilterTransformable
-            : null;
 
         foreach (var condition in filter.Filters)
         {
@@ -42,28 +80,20 @@ public static class FilterExpressionBuilder
             }
             else
             {
-                // Get transformed conditions from IFilterTransformable
-                // Entity returns [condition] unchanged if no transformation needed
-                var transformedConditions = filterTransformable!.GetTransformedFilters(condition);
+                var transformedConditions = transformFunc(condition);
 
                 if (transformedConditions.Count == 1)
                 {
-                    // Single condition (most common case)
                     conditionExpression = BuildConditionExpression<T>(transformedConditions[0], parameter, options);
                 }
                 else if (transformedConditions.Count > 1)
                 {
-                    // Multiple conditions - combine with OR (e.g., MapToMany)
                     Expression? orExpression = null;
                     foreach (var transformedCondition in transformedConditions)
                     {
                         var expr = BuildConditionExpression<T>(transformedCondition, parameter, options);
                         if (expr != null)
-                        {
-                            orExpression = orExpression == null
-                                ? expr
-                                : Expression.OrElse(orExpression, expr);
-                        }
+                            orExpression = orExpression == null ? expr : Expression.OrElse(orExpression, expr);
                     }
                     conditionExpression = orExpression;
                 }
@@ -89,14 +119,42 @@ public static class FilterExpressionBuilder
             if (string.IsNullOrEmpty(condition.Field))
                 return null;
 
-            if (condition.Field.StartsWith(FilterConstant.Prefixes.Collection))
+            // Flag-based Detection (Priority)
+            if (condition.IsManyToMany && !string.IsNullOrEmpty(condition.JoinNavigationProperty) && !string.IsNullOrEmpty(condition.ItemField))
             {
-                return BuildCollectionExpression<T>(condition, parameter, options);
+                return BuildCollectionExpressionDirect<T>(condition.Field, $"{condition.JoinNavigationProperty}.{condition.ItemField}", condition, parameter, options);
             }
 
-            if (condition.Field.StartsWith(FilterConstant.Prefixes.ManyToMany))
+            if (condition.IsCollection && !string.IsNullOrEmpty(condition.ItemField))
             {
-                return BuildManyToManyExpression<T>(condition, parameter, options);
+                return BuildCollectionExpressionDirect<T>(condition.Field, condition.ItemField, condition, parameter, options);
+            }
+
+            // Automatic Path Detection (Fallback)
+            // If the field is "Tags.Name" and "Tags" is a collection, we handle it as a collection filter.
+            if (condition.Field.Contains('.'))
+            {
+                var parts = condition.Field.Split('.');
+                var currentPath = string.Empty;
+                var currentType = typeof(T);
+
+                for (int i = 0; i < parts.Length - 1; i++) // Check up to the second to last part
+                {
+                    currentPath = string.IsNullOrEmpty(currentPath) ? parts[i] : $"{currentPath}.{parts[i]}";
+                    var prop = currentType.GetProperty(parts[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    
+                    if (prop != null)
+                    {
+                        if (prop.PropertyType != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
+                        {
+                            // We found a collection property in the path!
+                            // Redirect to collection builder with path up to here, and the rest as itemField
+                            var itemField = string.Join(".", parts.Skip(i + 1));
+                            return BuildCollectionExpressionDirect<T>(currentPath, itemField, condition, parameter, options);
+                        }
+                        currentType = prop.PropertyType;
+                    }
+                }
             }
 
             var propertyAccess = parameter.GetPropertyAccess(condition.Field, out var property);
@@ -118,17 +176,8 @@ public static class FilterExpressionBuilder
         }
     }
 
-    private static MethodCallExpression? BuildCollectionExpression<T>(FilterCondition condition, ParameterExpression parameter, QueryFilterOptions options)
+    private static MethodCallExpression? BuildCollectionExpressionDirect<T>(string collectionPath, string itemField, FilterCondition condition, ParameterExpression parameter, QueryFilterOptions options)
     {
-        ReadOnlySpan<char> fieldSpan = condition.Field.AsSpan();
-        int firstColon = fieldSpan.IndexOf(':');
-        int lastColon = fieldSpan.LastIndexOf(':');
-
-        if (firstColon == -1 || lastColon == -1 || firstColon == lastColon) return null;
-
-        var collectionPath = fieldSpan.Slice(firstColon + 1, lastColon - firstColon - 1).ToString();
-        var itemField = fieldSpan[(lastColon + 1)..].ToString();
-
         var collectionAccess = parameter.GetPropertyAccess(collectionPath, out var collectionProperty);
         if (collectionAccess == null || collectionProperty == null) return null;
 
@@ -136,11 +185,11 @@ public static class FilterExpressionBuilder
         var itemType = currentType.IsGenericType ? currentType.GetGenericArguments()[0] : currentType.GetElementType();
         if (itemType == null) return null;
 
-        var itemProperty = itemType.GetProperty(itemField, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-        if (itemProperty == null) return null;
-
-        var itemParameter = Expression.Parameter(itemType, "t");
-        var itemPropertyAccess = Expression.Property(itemParameter, itemProperty);
+        var itemParam = Expression.Parameter(itemType, "t");
+        
+        // Handle nested properties inside collection (e.g. "Tags.Category.Name")
+        var itemPropertyAccess = itemParam.GetPropertyAccess(itemField, out var itemProperty);
+        if (itemPropertyAccess == null || itemProperty == null) return null;
 
         Expression? predicateBody = null;
         var typeBuilder = options.GetTypeBuilder(itemProperty.PropertyType);
@@ -149,69 +198,15 @@ public static class FilterExpressionBuilder
             predicateBody = typeBuilder.BuildExpression(itemPropertyAccess, condition);
         }
 
-        predicateBody ??= BuildStandardExpression(itemParameter, itemProperty, condition.Operator, condition.Value, condition.CaseSensitiveFilter, itemPropertyAccess);
+        predicateBody ??= BuildStandardExpression(itemParam, itemProperty, condition.Operator, condition.Value, condition.CaseSensitiveFilter, itemPropertyAccess);
         if (predicateBody == null) return null;
 
-        var predicateLambda = Expression.Lambda(predicateBody, itemParameter);
+        var lambda = Expression.Lambda(predicateBody, itemParam);
         var anyMethod = typeof(Enumerable).GetMethods()
             .First(m => m.Name == FilterConstant.Any && m.GetParameters().Length == 2)
             .MakeGenericMethod(itemType);
 
-        return Expression.Call(anyMethod, collectionAccess, predicateLambda);
-    }
-
-    private static MethodCallExpression? BuildManyToManyExpression<T>(FilterCondition condition, ParameterExpression parameter, QueryFilterOptions options)
-    {
-        ReadOnlySpan<char> fieldSpan = condition.Field.AsSpan();
-        int firstColon = fieldSpan.IndexOf(':');
-        if (firstColon == -1) return null;
-
-        var remaining = fieldSpan[(firstColon + 1)..];
-        int secondColon = remaining.IndexOf(':');
-        if (secondColon == -1) return null;
-
-        var joinCollectionPath = remaining[..secondColon].ToString();
-        remaining = remaining[(secondColon + 1)..];
-        int thirdColon = remaining.IndexOf(':');
-        if (thirdColon == -1) return null;
-
-        var navigationProperty = remaining[..thirdColon].ToString();
-        var itemField = remaining[(thirdColon + 1)..].ToString();
-
-        var collectionAccess = parameter.GetPropertyAccess(joinCollectionPath, out var collectionProperty);
-        if (collectionAccess == null || collectionProperty == null) return null;
-
-        var currentType = collectionProperty.PropertyType;
-        var joinType = currentType.IsGenericType ? currentType.GetGenericArguments()[0] : currentType.GetElementType();
-        if (joinType == null) return null;
-
-        var navProperty = joinType.GetProperty(navigationProperty, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-        if (navProperty == null) return null;
-
-        var relatedType = navProperty.PropertyType;
-        var targetProperty = relatedType.GetProperty(itemField, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-        if (targetProperty == null) return null;
-
-        var joinParameter = Expression.Parameter(joinType, "pc");
-        var navAccess = Expression.Property(joinParameter, navProperty);
-        var targetAccess = Expression.Property(navAccess, targetProperty);
-
-        Expression? predicateBody = null;
-        var typeBuilder = options.GetTypeBuilder(targetProperty.PropertyType);
-        if (typeBuilder != null)
-        {
-            predicateBody = typeBuilder.BuildExpression(targetAccess, condition);
-        }
-
-        predicateBody ??= BuildStandardExpression(joinParameter, targetProperty, condition.Operator, condition.Value, condition.CaseSensitiveFilter, targetAccess);
-        if (predicateBody == null) return null;
-
-        var predicateLambda = Expression.Lambda(predicateBody, joinParameter);
-        var anyMethod = typeof(Enumerable).GetMethods()
-            .First(m => m.Name == FilterConstant.Any && m.GetParameters().Length == 2)
-            .MakeGenericMethod(joinType);
-
-        return Expression.Call(anyMethod, collectionAccess, predicateLambda);
+        return Expression.Call(anyMethod, collectionAccess, lambda);
     }
 
     private static readonly MethodInfo StringToLower = typeof(string).GetMethod(nameof(string.ToLower), Type.EmptyTypes)!;
