@@ -18,36 +18,15 @@ public static class FilterExpressionBuilder
         return query;
     }
 
+    private static readonly ConcurrentDictionary<(Type, string), MethodInfo> _genericMethodCache = new();
+
     public static Expression? BuildFilterExpression<T>(FilterCondition filter, ParameterExpression parameter, QueryFilterOptions options) where T : class, new()
     {
-        var filterTransformable = typeof(IFilterTransformable).IsAssignableFrom(typeof(T))
-            ? Activator.CreateInstance<T>() as IFilterTransformable
-            : null;
-
-        // Unified transformation logic: 
-        // 1. If interface exists, try it first.
-        // 2. If interface is missing OR it returns the original condition (unmodified), 
-        //    fallback to automatic FilterTransform attributes.
-        Func<FilterCondition, List<FilterCondition>> transformFunc = (cond) =>
-        {
-            if (filterTransformable != null)
-            {
-                var result = filterTransformable.GetTransformedFilters(cond);
-                
-                // If the interface returned something different than original 
-                // OR it returned multiple conditions, it means it handled the transformation.
-                if (result.Count > 1 || (result.Count == 1 && (result[0].Field != cond.Field || result[0].Value != cond.Value)))
-                {
-                    return result;
-                }
-            }
-            
-            return FilterTransformAttributeHelper.GetTransformedFilters<T>(cond);
-        };
+        var filterTransformable = FilterTransformableCache<T>.Instance;
 
         if (filter.Filters == null || filter.Filters.Count == 0)
         {
-            var transformed = transformFunc(filter);
+            var transformed = GetTransformedFilters<T>(filter, filterTransformable);
             
             if (transformed.Count == 1)
                 return BuildConditionExpression<T>(transformed[0], parameter, options);
@@ -80,7 +59,7 @@ public static class FilterExpressionBuilder
             }
             else
             {
-                var transformedConditions = transformFunc(condition);
+                var transformedConditions = GetTransformedFilters<T>(condition, filterTransformable);
 
                 if (transformedConditions.Count == 1)
                 {
@@ -112,6 +91,20 @@ public static class FilterExpressionBuilder
         return combinedExpression;
     }
 
+    private static List<FilterCondition> GetTransformedFilters<T>(FilterCondition cond, IFilterTransformable? transformable) where T : class
+    {
+        if (transformable != null)
+        {
+            var result = transformable.GetTransformedFilters(cond);
+            if (result.Count > 1 || (result.Count == 1 && (result[0].Field != cond.Field || result[0].Value != cond.Value)))
+            {
+                return result;
+            }
+        }
+        
+        return FilterTransformAttributeHelper.GetTransformedFilters<T>(cond);
+    }
+
     public static Expression? BuildConditionExpression<T>(FilterCondition condition, ParameterExpression parameter, QueryFilterOptions options) where T : class, new()
     {
         try
@@ -132,13 +125,13 @@ public static class FilterExpressionBuilder
 
             // Automatic Path Detection (Fallback)
             // If the field is "Tags.Name" and "Tags" is a collection, we handle it as a collection filter.
-            if (condition.Field.Contains('.'))
+            if (condition.Field.Contains('.') && PropertyHelper.HasCollectionInPath(typeof(T), condition.Field))
             {
                 var parts = condition.Field.Split('.');
                 var currentPath = string.Empty;
                 var currentType = typeof(T);
 
-                for (int i = 0; i < parts.Length - 1; i++) // Check up to the second to last part
+                for (int i = 0; i < parts.Length - 1; i++) // We still split once here to find the split point, but we know it's a collection
                 {
                     currentPath = string.IsNullOrEmpty(currentPath) ? parts[i] : $"{currentPath}.{parts[i]}";
                     var prop = currentType.GetProperty(parts[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
@@ -147,8 +140,6 @@ public static class FilterExpressionBuilder
                     {
                         if (prop.PropertyType != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
                         {
-                            // We found a collection property in the path!
-                            // Redirect to collection builder with path up to here, and the rest as itemField
                             var itemField = string.Join(".", parts.Skip(i + 1));
                             return BuildCollectionExpressionDirect<T>(currentPath, itemField, condition, parameter, options);
                         }
@@ -163,12 +154,10 @@ public static class FilterExpressionBuilder
             var typeBuilder = options.GetTypeBuilder(property.PropertyType);
             if (typeBuilder != null)
             {
-                var customExpression = typeBuilder.BuildExpression(propertyAccess, condition);
-                if (customExpression != null)
-                    return customExpression;
+                return typeBuilder.BuildExpression(propertyAccess, condition);
             }
 
-            return BuildStandardExpression(parameter, property, condition.Operator, condition.Value, condition.CaseSensitiveFilter, propertyAccess);
+            return BuildStandardExpression(parameter, property, condition.Operator, condition.Value, options, condition.CaseSensitiveFilter, propertyAccess);
         }
         catch
         {
@@ -198,14 +187,15 @@ public static class FilterExpressionBuilder
             predicateBody = typeBuilder.BuildExpression(itemPropertyAccess, condition);
         }
 
-        predicateBody ??= BuildStandardExpression(itemParam, itemProperty, condition.Operator, condition.Value, condition.CaseSensitiveFilter, itemPropertyAccess);
+        predicateBody ??= BuildStandardExpression(itemParam, itemProperty, condition.Operator, condition.Value, options, condition.CaseSensitiveFilter, itemPropertyAccess);
         if (predicateBody == null) return null;
 
+        var anyMethod = _genericMethodCache.GetOrAdd((itemType, "Enumerable.Any"), key => 
+            typeof(Enumerable).GetMethods()
+                .First(m => m.Name == "Any" && m.GetParameters().Length == 2)
+                .MakeGenericMethod(key.Item1));
+        
         var lambda = Expression.Lambda(predicateBody, itemParam);
-        var anyMethod = typeof(Enumerable).GetMethods()
-            .First(m => m.Name == FilterConstant.Any && m.GetParameters().Length == 2)
-            .MakeGenericMethod(itemType);
-
         return Expression.Call(anyMethod, collectionAccess, lambda);
     }
 
@@ -215,7 +205,7 @@ public static class FilterExpressionBuilder
     private static readonly MethodInfo StringEndsWith = typeof(string).GetMethod(nameof(string.EndsWith), [typeof(string)])!;
     private static readonly MethodInfo StringIsNullOrEmpty = typeof(string).GetMethod(nameof(string.IsNullOrEmpty), [typeof(string)])!;
 
-    private static Expression? BuildStandardExpression(ParameterExpression parameter, PropertyInfo property, FilterOperator operatorType, object? value, bool caseSensitive = false, Expression? propertyAccess = null)
+    private static Expression? BuildStandardExpression(ParameterExpression parameter, PropertyInfo property, FilterOperator operatorType, object? value, QueryFilterOptions options, bool caseSensitive = false, Expression? propertyAccess = null)
     {
         propertyAccess ??= Expression.Property(parameter, property);
         var isString = property.PropertyType == typeof(string);
@@ -244,17 +234,17 @@ public static class FilterExpressionBuilder
         Expression propExpr = propertyAccess;
         Expression valExpr = valueExpression;
 
-        if (isString && !caseSensitive)
+        if (isString && !caseSensitive && !options.DisableAutomaticToLower && convertedValue is string strVal)
         {
             propExpr = Expression.Call(propertyAccess, StringToLower);
-            if (convertedValue is string strVal)
-                valExpr = Expression.Constant(strVal.ToLower());
+            // Optimization: Lowercase the constant value once during expression building, not at runtime.
+            valExpr = Expression.Constant(strVal.ToLower());
         }
 
         return operatorType switch
         {
-            FilterOperator.IsEqualTo => Expression.Equal(isString && !caseSensitive ? propExpr : propertyAccess, isString && !caseSensitive ? valExpr : valueExpression),
-            FilterOperator.IsNotEqualTo => Expression.NotEqual(isString && !caseSensitive ? propExpr : propertyAccess, isString && !caseSensitive ? valExpr : valueExpression),
+            FilterOperator.IsEqualTo => Expression.Equal(propExpr, valExpr),
+            FilterOperator.IsNotEqualTo => Expression.NotEqual(propExpr, valExpr),
             FilterOperator.IsLessThan => Expression.LessThan(propertyAccess, valueExpression),
             FilterOperator.IsLessThanOrEqualTo => Expression.LessThanOrEqual(propertyAccess, valueExpression),
             FilterOperator.IsGreaterThan => Expression.GreaterThan(propertyAccess, valueExpression),
@@ -300,5 +290,18 @@ public static class FilterExpressionBuilder
             if (long.TryParse(strValue, out var lv)) return lv;
         }
         return Convert.ChangeType(strValue, underlyingType);
+    }
+}
+
+internal static class FilterTransformableCache<T> where T : class, new()
+{
+    public static readonly IFilterTransformable? Instance;
+
+    static FilterTransformableCache()
+    {
+        if (typeof(IFilterTransformable).IsAssignableFrom(typeof(T)))
+        {
+            Instance = Activator.CreateInstance<T>() as IFilterTransformable;
+        }
     }
 }

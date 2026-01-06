@@ -157,6 +157,19 @@ public async Task<ActionResult<ListViewResponse<Product>>> Get()
 }
 ```
 
+## ⚡ Performance Tips
+
+Siftly is highly optimized for performance, often outperforming raw LINQ queries thanks to its centralized reflection and property metadata caching.
+
+- **Case Sensitivity**: By default, `CaseSensitiveFilter` is set to `true`. This provides the best performance as it avoids injecting `.ToLower()` into queries, which can cause full table scans in some databases. 
+- **SQL Server Support**: If you are using SQL Server with a case-insensitive collation, you should enable `DisableAutomaticToLower` in your configuration to preserve index performance even when `CaseSensitiveFilter` is false:
+  ```csharp
+  builder.Services.AddQueryFilter(options => {
+      options.DisableAutomaticToLower = true;
+  });
+  ```
+- **Caching**: Siftly automatically caches `PropertyInfo` chains and generic methods, ensuring that query building overhead is near-zero after the first execution.
+
 ## 📚 Filter Operators Reference
 
 - **Equality**: `eq` (IsEqualTo), `neq` (IsNotEqualTo)

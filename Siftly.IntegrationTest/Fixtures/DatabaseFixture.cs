@@ -10,17 +10,23 @@ public interface IDatabaseFixture : IAsyncLifetime
 }
 
 /// <summary>
-/// SQL Server LocalDB fixture for MSSQL integration tests
+/// SQL Server fixture for MSSQL integration tests
+/// Uses Testcontainers for Docker-based database
 /// </summary>
 public class SqlServerFixture : IDatabaseFixture
 {
-    private readonly string _connectionString;
+    private readonly Testcontainers.MsSql.MsSqlContainer _container;
+    private readonly string _databaseName;
     private DbContextOptions<TestDbContext>? _options;
 
     public SqlServerFixture()
     {
-        var databaseName = $"EfCoreQuerying_Test_{Guid.NewGuid():N}";
-        _connectionString = $"Server=(localdb)\\mssqllocaldb;Database={databaseName};Trusted_Connection=True;MultipleActiveResultSets=true";
+        _databaseName = $"Siftly_Test_{Guid.NewGuid():N}";
+        _container = new Testcontainers.MsSql.MsSqlBuilder()
+            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+            .WithPassword("Strong!Pass12345")
+            .WithEnvironment("ACCEPT_EULA", "Y")
+            .Build();
     }
 
     public string DatabaseProvider => "SqlServer";
@@ -32,8 +38,13 @@ public class SqlServerFixture : IDatabaseFixture
         services.AddQueryFilter();
         services.BuildServiceProvider();
 
+        await _container.StartAsync();
+
+        // Ensure we connect to our specific test database, not master
+        var connectionString = $"{_container.GetConnectionString()};Database={_databaseName};TrustServerCertificate=True";
+
         _options = new DbContextOptionsBuilder<TestDbContext>()
-            .UseSqlServer(_connectionString)
+            .UseSqlServer(connectionString)
             .Options;
 
         await using var context = new TestDbContext(_options);
@@ -48,6 +59,7 @@ public class SqlServerFixture : IDatabaseFixture
             await using var context = new TestDbContext(_options);
             await context.Database.EnsureDeletedAsync();
         }
+        await _container.DisposeAsync();
     }
 
     public TestDbContext CreateContext()

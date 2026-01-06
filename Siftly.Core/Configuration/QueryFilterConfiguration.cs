@@ -37,6 +37,12 @@ public class QueryFilterOptions
     public int DefaultPageSize { get; set; } = 20;
 
     /// <summary>
+    /// If true, Siftly will NOT apply .ToLower() to string comparisons even when CaseSensitiveFilter is false.
+    /// Enable this if your database (like MSSQL) is already configured to be case-insensitive to preserve index performance.
+    /// </summary>
+    public bool DisableAutomaticToLower { get; set; } = false;
+
+    /// <summary>
     /// Registered type expression builders for filtering
     /// </summary>
     internal Dictionary<Type, ITypeExpressionBuilder> TypeBuilders { get; } = [];
