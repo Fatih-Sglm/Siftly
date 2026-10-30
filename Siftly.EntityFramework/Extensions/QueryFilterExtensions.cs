@@ -61,7 +61,6 @@ public static class QueryFilterExtensions
         QueryFilterRequest request) where T : class, new()
     {
         if (request == null) return query;
-        var options = QueryFilter.Options;
 
         // 3. Sorting
         if (request.Sort != null && request.Sort.Count > 0)
@@ -80,8 +79,7 @@ public static class QueryFilterExtensions
             query = query.Skip(request.Offset);
         }
 
-        var take = Math.Min(request.PageSize, options.MaxPageSize);
-        return query.Take(take);
+        return query.Take(request.PageSize);
     }
 
     #endregion

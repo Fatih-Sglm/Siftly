@@ -15,7 +15,7 @@ public class ListViewResponse<T>
     public ListViewResponse(List<T>? data, long? total = null, int skip = 0, int take = 20)
     {
         ListData = data ?? [];
-        TotalCount = total ?? data?.Count ?? 0;
+        TotalCount = total;
         Skip = skip;
         Take = take;
     }

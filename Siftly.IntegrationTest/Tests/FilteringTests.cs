@@ -378,7 +378,123 @@ public abstract class FilteringTestsBase<TFixture> : IClassFixture<TFixture>
 
         // Assert
         result.ListData.Should().HaveCount(5);
-        result.TotalCount.Should().Be(5); // Default list view response behavior if total is null
+        result.TotalCount.Should().BeNull();
+        result.HasNextPage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PageSize_AboveMaxPageSize_IsClampedSoOffsetMatchesTake()
+    {
+        var request = new QueryFilterRequest { Page = 2, PageSize = QueryFilter.Options.MaxPageSize + 500 };
+
+        request.PageSize.Should().Be(QueryFilter.Options.MaxPageSize);
+        request.Offset.Should().Be(QueryFilter.Options.MaxPageSize);
+    }
+
+    #endregion
+
+    #region Invalid And Set Filters
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_InOperatorWithJsonArray_ReturnsOnlyListedIds()
+    {
+        await using var context = Fixture.CreateContext();
+        var request = new QueryFilterRequest
+        {
+            Filter = new FilterCondition("Id", FilterOperator.In, System.Text.Json.JsonDocument.Parse("[1,2,3]").RootElement)
+        };
+
+        var result = await context.Products.ToListViewResponseAsync(request);
+
+        result.ListData.Select(p => p.Id).Should().BeEquivalentTo([1, 2, 3]);
+    }
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_InOperatorWithCommaSeparatedString_ReturnsOnlyListedIds()
+    {
+        await using var context = Fixture.CreateContext();
+        var request = new QueryFilterRequest
+        {
+            Filter = new FilterCondition("Id", FilterOperator.In, "4, 5")
+        };
+
+        var result = await context.Products.ToListViewResponseAsync(request);
+
+        result.ListData.Select(p => p.Id).Should().BeEquivalentTo([4, 5]);
+    }
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_UnknownField_ReturnsNothing()
+    {
+        await using var context = Fixture.CreateContext();
+        var request = new QueryFilterRequest
+        {
+            Filter = new FilterCondition("NoSuchField", FilterOperator.IsEqualTo, "x")
+        };
+
+        var result = await context.Products.ToListViewResponseAsync(request);
+
+        result.ListData.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_UnconvertibleValue_ReturnsNothing()
+    {
+        await using var context = Fixture.CreateContext();
+        var request = new QueryFilterRequest
+        {
+            Filter = new FilterCondition("Id", FilterOperator.IsEqualTo, "abc")
+        };
+
+        var result = await context.Products.ToListViewResponseAsync(request);
+
+        result.ListData.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_InvalidLeafInsideOrGroup_DoesNotWidenResults()
+    {
+        await using var context = Fixture.CreateContext();
+        var request = new QueryFilterRequest
+        {
+            Filter = new FilterCondition
+            {
+                Logic = FilterConstant.Or,
+                Filters =
+                [
+                    new FilterCondition("Id", FilterOperator.IsEqualTo, 1),
+                    new FilterCondition("NoSuchField", FilterOperator.IsEqualTo, "x")
+                ]
+            }
+        };
+
+        var result = await context.Products.ToListViewResponseAsync(request);
+
+        result.ListData.Select(p => p.Id).Should().BeEquivalentTo([1]);
+    }
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_DecimalValueUnderTurkishCulture_IsParsedInvariantly()
+    {
+        var originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("tr-TR");
+        try
+        {
+            await using var context = Fixture.CreateContext();
+            var request = new QueryFilterRequest
+            {
+                Filter = new FilterCondition("Price", FilterOperator.IsLessThanOrEqualTo, System.Text.Json.JsonDocument.Parse("149.99").RootElement)
+            };
+
+            var result = await context.Products.ToListViewResponseAsync(request);
+
+            result.ListData.Should().HaveCount(3);
+            result.ListData.Should().AllSatisfy(p => p.Price.Should().BeLessThanOrEqualTo(149.99m));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     #endregion

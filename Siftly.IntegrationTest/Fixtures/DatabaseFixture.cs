@@ -22,8 +22,7 @@ public class SqlServerFixture : IDatabaseFixture
     public SqlServerFixture()
     {
         _databaseName = $"Siftly_Test_{Guid.NewGuid():N}";
-        _container = new Testcontainers.MsSql.MsSqlBuilder()
-            .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+        _container = new Testcontainers.MsSql.MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest")
             .WithPassword("Strong!Pass12345")
             .WithEnvironment("ACCEPT_EULA", "Y")
             .Build();
@@ -84,8 +83,7 @@ public class PostgreSqlFixture : IDatabaseFixture
 
     public PostgreSqlFixture()
     {
-        _container = new Testcontainers.PostgreSql.PostgreSqlBuilder()
-            .WithImage("postgres:16-alpine")
+        _container = new Testcontainers.PostgreSql.PostgreSqlBuilder("postgres:16-alpine")
             .WithDatabase("efcore_querying_test")
             .WithUsername("test")
             .WithPassword("test")

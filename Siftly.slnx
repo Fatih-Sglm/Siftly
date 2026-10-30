@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Examples/">
+    <Project Path="Siftly.ExampleApp/Siftly.ExampleApp.csproj" Id="88ecf12a-7f5f-46b3-ba8d-17793fe078ed" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />

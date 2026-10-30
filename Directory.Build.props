@@ -14,8 +14,8 @@
     <Company>Siftly</Company>
     <Description>Advanced querying and filtering library for .NET</Description>
     <PackageTags>query;filter;efcore;dynamic;filtering</PackageTags>
-    <PackageProjectUrl>https://github.com/fatih/Siftly</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/fatih/Siftly</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Fatih-Sglm/Siftly</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Fatih-Sglm/Siftly</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     

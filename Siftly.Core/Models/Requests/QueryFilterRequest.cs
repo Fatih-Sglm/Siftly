@@ -23,7 +23,7 @@ public class QueryFilterRequest
     /// </summary>
     public int PageSize
     {
-        get => _pageSize < 1 ? QueryFilter.Options.DefaultPageSize : _pageSize;
+        get => Math.Min(_pageSize < 1 ? QueryFilter.Options.DefaultPageSize : _pageSize, QueryFilter.Options.MaxPageSize);
         set => _pageSize = value < 1 ? QueryFilter.Options.DefaultPageSize : value;
     }
 

@@ -3,14 +3,27 @@ using BenchmarkDotNet.Running;
 using Microsoft.EntityFrameworkCore;
 using Siftly.Core;
 using Siftly.EntityFramework;
+using Testcontainers.PostgreSql;
 
 namespace Siftly.Benchmark;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
-        BenchmarkRunner.Run<FilterBenchmark>();
+        await using var container = new PostgreSqlBuilder("postgres:16-alpine")
+            .WithDatabase("siftly_benchmark")
+            .Build();
+        await container.StartAsync();
+        Environment.SetEnvironmentVariable(FilterBenchmark.ConnectionStringVariable, container.GetConnectionString());
+
+        await using (var context = FilterBenchmark.CreateContext())
+        {
+            await context.Database.EnsureCreatedAsync();
+            FilterBenchmark.Seed(context);
+        }
+
+        BenchmarkRunner.Run<FilterBenchmark>(args: ["--inProcess", .. args]);
     }
 }
 
@@ -75,21 +88,28 @@ public class Event : IFilterTransformable
 [MemoryDiagnoser]
 public class FilterBenchmark
 {
+    public const string ConnectionStringVariable = "SIFTLY_BENCHMARK_CONNECTION";
+
     private BenchmarkDbContext _context = null!;
     private long _interfaceTimestamp;
 
-    [GlobalSetup]
-    public void Setup()
+    public static BenchmarkDbContext CreateContext()
     {
-        var optionsBuilder = new DbContextOptionsBuilder<BenchmarkDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString());
-        _context = new BenchmarkDbContext(optionsBuilder.Options);
+        var connectionString = Environment.GetEnvironmentVariable(ConnectionStringVariable)
+            ?? throw new InvalidOperationException($"{ConnectionStringVariable} is not set. Run the benchmark through Program.Main.");
 
-        // Seed
-        var categories = Enumerable.Range(1, 10).Select(i => new Category { Id = i, Name = $"Category {i}" }).ToList();
-        _context.Categories.AddRange(categories);
+        var options = new DbContextOptionsBuilder<BenchmarkDbContext>()
+            .UseNpgsql(connectionString)
+            .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
+            .Options;
+        return new BenchmarkDbContext(options);
+    }
 
-        var products = Enumerable.Range(1, 1000).Select(i => new Product
+    public static void Seed(BenchmarkDbContext context)
+    {
+        context.Categories.AddRange(Enumerable.Range(1, 10).Select(i => new Category { Id = i, Name = $"Category {i}" }));
+
+        context.Products.AddRange(Enumerable.Range(1, 1000).Select(i => new Product
         {
             Id = i,
             Name = $"Product {i}",
@@ -97,22 +117,37 @@ public class FilterBenchmark
             Price = i * 10,
             Tags = [new ProductTag { Id = i, Name = $"Tag {i % 10}" }],
             ProductCategories = [new ProductCategory { ProductId = i, CategoryId = (i % 10) + 1 }]
-        }).ToList();
-        _context.Products.AddRange(products);
+        }));
 
-        var events = Enumerable.Range(1, 1000).Select(i => new Event
+        context.Events.AddRange(Enumerable.Range(1, 1000).Select(i => new Event
         {
             Id = i,
             Name = $"Event {i}",
             CreatedOnTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-        }).ToList();
-        _context.Events.AddRange(events);
+        }));
 
-        _context.SaveChanges();
-
-        // Pre-parse for raw equivalent baseline
-        _interfaceTimestamp = DateTimeOffset.Parse("2024-01-01T00:00:00Z").ToUnixTimeMilliseconds();
+        context.SaveChanges();
     }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _context = CreateContext();
+        _interfaceTimestamp = DateTimeOffset.Parse("2024-01-01T00:00:00Z").ToUnixTimeMilliseconds();
+
+        (string Name, int Raw, int Siftly)[] pairs =
+        [
+            ("Attribute", RawEfCore_AttributeEquivalent().Count, Siftly_AttributeSearch().Count),
+            ("Complex_Sensitive", RawEfCore_ComplexEquivalent_Sensitive().Count, Siftly_ComplexSearch_Sensitive().Count),
+            ("Complex_Insensitive", RawEfCore_ComplexEquivalent_Insensitive().Count, Siftly_ComplexSearch_Insensitive().Count),
+            ("Interface", RawEfCore_InterfaceEquivalent().Count, Siftly_InterfaceSearch().Count)
+        ];
+        foreach (var pair in pairs.Where(p => p.Raw != p.Siftly))
+            throw new InvalidOperationException($"{pair.Name}: raw EF returned {pair.Raw} rows, Siftly returned {pair.Siftly}");
+    }
+
+    [GlobalCleanup]
+    public void Cleanup() => _context.Dispose();
 
     #region Normal Search (Attribute Based)
 
@@ -132,7 +167,7 @@ public class FilterBenchmark
         { 
             Filter = new FilterCondition("search", FilterOperator.Contains, "500") { CaseSensitiveFilter = true } 
         };
-        return _context.Products.ApplyQueryFilter(request).ToList();
+        return _context.Products.ApplyFilters(request).ToList();
     }
 
     #endregion
@@ -183,7 +218,7 @@ public class FilterBenchmark
                 ]
             }
         };
-        return _context.Products.ApplyQueryFilter(request).ToList();
+        return _context.Products.ApplyFilters(request).ToList();
     }
 
     [Benchmark]
@@ -202,7 +237,7 @@ public class FilterBenchmark
                 ]
             }
         };
-        return _context.Products.ApplyQueryFilter(request).ToList();
+        return _context.Products.ApplyFilters(request).ToList();
     }
 
     #endregion
@@ -222,7 +257,7 @@ public class FilterBenchmark
         { 
             Filter = new FilterCondition("CreatedOn", FilterOperator.IsGreaterThan, "2024-01-01T00:00:00Z") 
         };
-        return _context.Events.ApplyQueryFilter(request).ToList();
+        return _context.Events.ApplyFilters(request).ToList();
     }
 
     #endregion

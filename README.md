@@ -1,6 +1,6 @@
 # Siftly
 
-[![.NET](https://img.shields.io/badge/.NET-8%20%7C%209%20%7C%2010-512BD4)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](https://dotnet.microsoft.com/)
 [![NuGet](https://img.shields.io/nuget/v/Siftly.Core.svg)](https://www.nuget.org/packages/Siftly.Core/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -159,7 +159,7 @@ public async Task<ActionResult<ListViewResponse<Product>>> Get()
 
 ## ⚡ Performance Tips
 
-Siftly is highly optimized for performance, often outperforming raw LINQ queries thanks to its centralized reflection and property metadata caching.
+Siftly caches reflection and property metadata so that building a dynamic filter adds little on top of the equivalent hand-written LINQ query. See [Benchmarks](#-benchmarks) for measured numbers.
 
 - **Case Sensitivity**: By default, `CaseSensitiveFilter` is set to `true`. This provides the best performance as it avoids injecting `.ToLower()` into queries, which can cause full table scans in some databases. 
 - **SQL Server Support**: If you are using SQL Server with a case-insensitive collation, you should enable `DisableAutomaticToLower` in your configuration to preserve index performance even when `CaseSensitiveFilter` is false:
@@ -169,6 +169,35 @@ Siftly is highly optimized for performance, often outperforming raw LINQ queries
   });
   ```
 - **Caching**: Siftly automatically caches `PropertyInfo` chains and generic methods, ensuring that query building overhead is near-zero after the first execution.
+
+## 📊 Benchmarks
+
+Each Siftly filter is compared with the equivalent hand-written EF Core `Where` query. Both sides return the same rows (verified at setup). The numbers cover query building, SQL translation and execution against a real PostgreSQL 16 database (Testcontainers, 1,000 seeded rows, no-tracking queries) on .NET 10.
+
+Regenerate this section with `./benchmark-readme.ps1` (requires Docker; pass `-BenchmarkArgs "--job","short"` for a quick run).
+
+<!-- BENCHMARK:START -->
+```
+
+BenchmarkDotNet v0.15.8, Windows 11 (10.0.26300.9711)
+AMD Ryzen 9 8945HX with Radeon Graphics 2.50GHz, 1 CPU, 32 logical and 16 physical cores
+.NET SDK 10.0.403
+  [Host] : .NET 10.0.14 (10.0.14, 10.0.1426.52326), X64 RyuJIT x86-64-v4
+
+Toolchain=InProcessEmitToolchain  
+
+```
+| Method                                  | Mean     | Error    | StdDev   | Ratio | RatioSD | Gen0    | Gen1   | Allocated | Alloc Ratio |
+|---------------------------------------- |---------:|---------:|---------:|------:|--------:|--------:|-------:|----------:|------------:|
+| RawEfCore_AttributeEquivalent           | 565.3 μs | 11.04 μs | 11.34 μs |  1.00 |    0.03 |       - |      - |   9.12 KB |        1.00 |
+| Siftly_AttributeSearch                  | 562.1 μs | 11.12 μs | 14.06 μs |  0.99 |    0.03 |       - |      - |   7.26 KB |        0.80 |
+| RawEfCore_ComplexEquivalent_Sensitive   | 729.9 μs | 13.81 μs | 13.57 μs |  1.29 |    0.03 |       - |      - |  13.58 KB |        1.49 |
+| RawEfCore_ComplexEquivalent_Insensitive | 890.9 μs | 17.26 μs | 16.15 μs |  1.58 |    0.04 |  0.9766 |      - |  18.04 KB |        1.98 |
+| Siftly_ComplexSearch_Sensitive          | 752.7 μs | 14.86 μs | 13.90 μs |  1.33 |    0.04 |       - |      - |   9.91 KB |        1.09 |
+| Siftly_ComplexSearch_Insensitive        | 831.9 μs | 12.70 μs | 11.25 μs |  1.47 |    0.04 |       - |      - |  10.11 KB |        1.11 |
+| RawEfCore_InterfaceEquivalent           | 699.2 μs |  6.95 μs |  6.50 μs |  1.24 |    0.03 | 17.5781 | 2.9297 |  287.8 KB |       31.56 |
+| Siftly_InterfaceSearch                  | 723.2 μs | 14.40 μs | 20.65 μs |  1.28 |    0.04 | 16.6016 | 2.9297 | 286.62 KB |       31.43 |
+<!-- BENCHMARK:END -->
 
 ## 📚 Filter Operators Reference
 
@@ -183,7 +212,6 @@ Siftly is highly optimized for performance, often outperforming raw LINQ queries
 | .NET Version | EF Core Version |
 | :--- | :--- |
 | .NET 8.0 | 8.0.x |
-| .NET 9.0 | 9.0.x |
 | .NET 10.0 | 10.0.x |
 
 ## 🤝 Contributing

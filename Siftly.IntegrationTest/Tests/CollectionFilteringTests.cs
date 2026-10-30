@@ -209,6 +209,43 @@ public abstract class CollectionFilteringTestsBase<TFixture> : IClassFixture<TFi
     }
 
     #endregion
+
+    #region FilterTransformationBuilder Collection Mapping
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_BuilderMapToCollection_ReturnsMatchingProducts()
+    {
+        await using var context = Fixture.CreateContext();
+        var transformed = new FilterTransformationBuilder()
+            .When("tag").MapToCollection("Tags", "Name")
+            .Transform(new FilterCondition("tag", FilterOperator.IsEqualTo, "Apple"));
+        var request = new QueryFilterRequest { Filter = transformed.Single() };
+
+        var result = await context.Products.ToListViewResponseAsync(request);
+
+        result.ListData.Select(p => p.Id).Should().BeEquivalentTo([1, 3]);
+    }
+
+    [Fact]
+    public async Task ApplyQueryFilterAsync_BuilderMapToManyToMany_ReturnsMatchingProducts()
+    {
+        await using var context = Fixture.CreateContext();
+        var expectedIds = await context.Products
+            .Where(p => p.ProductCategories.Any(pc => pc.Category.Name == "Sports"))
+            .Select(p => p.Id)
+            .ToListAsync();
+        var transformed = new FilterTransformationBuilder()
+            .When("category").MapToManyToMany("ProductCategories", "Category", "Name")
+            .Transform(new FilterCondition("category", FilterOperator.IsEqualTo, "Sports"));
+        var request = new QueryFilterRequest { Filter = transformed.Single() };
+
+        var result = await context.Products.ToListViewResponseAsync(request);
+
+        expectedIds.Should().NotBeEmpty();
+        result.ListData.Select(p => p.Id).Should().BeEquivalentTo(expectedIds);
+    }
+
+    #endregion
 }
 
 /// <summary>

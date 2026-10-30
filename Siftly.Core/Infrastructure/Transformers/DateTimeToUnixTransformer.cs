@@ -9,7 +9,7 @@ public class DateTimeToUnixTransformer : IValueTransformer<string?, long>
     {
         if (string.IsNullOrEmpty(value)) return 0;
 
-        if (DateTimeOffset.TryParse(value, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dateTimeOffset))
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dateTimeOffset))
         {
             return dateTimeOffset.ToUnixTimeMilliseconds();
         }

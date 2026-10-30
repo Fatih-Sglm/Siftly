@@ -63,10 +63,12 @@ public class FilterTransformationBuilder
                 // Collection filter (one-to-many)
                 return [new FilterCondition
                 {
-                    Field = $"_collection_:{rule.CollectionPath}:{rule.CollectionItemField}",
+                    Field = rule.CollectionPath,
                     Operator = condition.Operator,
                     Value = transformedValue,
-                    CaseSensitiveFilter = condition.CaseSensitiveFilter
+                    CaseSensitiveFilter = condition.CaseSensitiveFilter,
+                    IsCollection = true,
+                    ItemField = rule.CollectionItemField
                 }];
             }
             else if (rule.IsManyToManyFilter)
@@ -74,10 +76,13 @@ public class FilterTransformationBuilder
                 // Many-to-many filter with join entity
                 return [new FilterCondition
                 {
-                    Field = $"_m2m_:{rule.CollectionPath}:{rule.JoinNavigationProperty}:{rule.CollectionItemField}",
+                    Field = rule.CollectionPath,
                     Operator = condition.Operator,
                     Value = transformedValue,
-                    CaseSensitiveFilter = condition.CaseSensitiveFilter
+                    CaseSensitiveFilter = condition.CaseSensitiveFilter,
+                    IsManyToMany = true,
+                    JoinNavigationProperty = rule.JoinNavigationProperty,
+                    ItemField = rule.CollectionItemField
                 }];
             }
             else if (!string.IsNullOrEmpty(rule.TargetField))

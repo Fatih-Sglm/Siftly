@@ -2,8 +2,7 @@ namespace Siftly.MultiLanguageContentTest.Tests;
 
 public class MultiLanguageFilteringTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
         .Build();
 
     private MultiLangDbContext _context = null!;
@@ -123,7 +122,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
         {
             Filter = new FilterCondition
             {
-                Field = "_collection_:Tags:TagName",
+                Field = "Tags.TagName",
                 Operator = FilterOperator.Contains,
                 Value = "Programlama"
             }
@@ -140,7 +139,7 @@ public class MultiLanguageFilteringTests : IAsyncLifetime
         {
             Filter = new FilterCondition
             {
-                Field = "_m2m_:ArticleTopics:Topic:Title",
+                Field = "ArticleTopics.Topic.Title",
                 Operator = FilterOperator.IsEqualTo,
                 Value = "Teknoloji"
             }

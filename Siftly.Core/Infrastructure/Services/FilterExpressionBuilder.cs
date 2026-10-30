@@ -96,7 +96,7 @@ public static class FilterExpressionBuilder
         if (transformable != null)
         {
             var result = transformable.GetTransformedFilters(cond);
-            if (result.Count > 1 || (result.Count == 1 && (result[0].Field != cond.Field || result[0].Value != cond.Value)))
+            if (result.Count > 1 || (result.Count == 1 && !ReferenceEquals(result[0], cond)))
             {
                 return result;
             }
@@ -105,64 +105,71 @@ public static class FilterExpressionBuilder
         return FilterTransformAttributeHelper.GetTransformedFilters<T>(cond);
     }
 
+    private static readonly Expression AlwaysFalse = Expression.Constant(false);
+
     public static Expression? BuildConditionExpression<T>(FilterCondition condition, ParameterExpression parameter, QueryFilterOptions options) where T : class, new()
     {
+        if (string.IsNullOrEmpty(condition.Field))
+            return null;
+
         try
         {
-            if (string.IsNullOrEmpty(condition.Field))
-                return null;
-
-            // Flag-based Detection (Priority)
-            if (condition.IsManyToMany && !string.IsNullOrEmpty(condition.JoinNavigationProperty) && !string.IsNullOrEmpty(condition.ItemField))
-            {
-                return BuildCollectionExpressionDirect<T>(condition.Field, $"{condition.JoinNavigationProperty}.{condition.ItemField}", condition, parameter, options);
-            }
-
-            if (condition.IsCollection && !string.IsNullOrEmpty(condition.ItemField))
-            {
-                return BuildCollectionExpressionDirect<T>(condition.Field, condition.ItemField, condition, parameter, options);
-            }
-
-            // Automatic Path Detection (Fallback)
-            // If the field is "Tags.Name" and "Tags" is a collection, we handle it as a collection filter.
-            if (condition.Field.Contains('.') && PropertyHelper.HasCollectionInPath(typeof(T), condition.Field))
-            {
-                var parts = condition.Field.Split('.');
-                var currentPath = string.Empty;
-                var currentType = typeof(T);
-
-                for (int i = 0; i < parts.Length - 1; i++) // We still split once here to find the split point, but we know it's a collection
-                {
-                    currentPath = string.IsNullOrEmpty(currentPath) ? parts[i] : $"{currentPath}.{parts[i]}";
-                    var prop = currentType.GetProperty(parts[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-                    
-                    if (prop != null)
-                    {
-                        if (prop.PropertyType != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
-                        {
-                            var itemField = string.Join(".", parts.Skip(i + 1));
-                            return BuildCollectionExpressionDirect<T>(currentPath, itemField, condition, parameter, options);
-                        }
-                        currentType = prop.PropertyType;
-                    }
-                }
-            }
-
-            var propertyAccess = parameter.GetPropertyAccess(condition.Field, out var property);
-            if (propertyAccess == null || property == null) return null;
-
-            var typeBuilder = options.GetTypeBuilder(property.PropertyType);
-            if (typeBuilder != null)
-            {
-                return typeBuilder.BuildExpression(propertyAccess, condition);
-            }
-
-            return BuildStandardExpression(parameter, property, condition.Operator, condition.Value, options, condition.CaseSensitiveFilter, propertyAccess);
+            return BuildFieldExpression<T>(condition.Field, condition, parameter, options) ?? AlwaysFalse;
         }
         catch
         {
-            return null;
+            return AlwaysFalse;
         }
+    }
+
+    private static Expression? BuildFieldExpression<T>(string field, FilterCondition condition, ParameterExpression parameter, QueryFilterOptions options) where T : class, new()
+    {
+        // Flag-based Detection (Priority)
+        if (condition.IsManyToMany && !string.IsNullOrEmpty(condition.JoinNavigationProperty) && !string.IsNullOrEmpty(condition.ItemField))
+        {
+            return BuildCollectionExpressionDirect<T>(field, $"{condition.JoinNavigationProperty}.{condition.ItemField}", condition, parameter, options);
+        }
+
+        if (condition.IsCollection && !string.IsNullOrEmpty(condition.ItemField))
+        {
+            return BuildCollectionExpressionDirect<T>(field, condition.ItemField, condition, parameter, options);
+        }
+
+        // Automatic Path Detection (Fallback)
+        // If the field is "Tags.Name" and "Tags" is a collection, we handle it as a collection filter.
+        if (field.Contains('.') && PropertyHelper.HasCollectionInPath(typeof(T), field))
+        {
+            var parts = field.Split('.');
+            var currentPath = string.Empty;
+            var currentType = typeof(T);
+
+            for (int i = 0; i < parts.Length - 1; i++) // We still split once here to find the split point, but we know it's a collection
+            {
+                currentPath = string.IsNullOrEmpty(currentPath) ? parts[i] : $"{currentPath}.{parts[i]}";
+                var prop = currentType.GetProperty(parts[i], BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                
+                if (prop != null)
+                {
+                    if (prop.PropertyType != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(prop.PropertyType))
+                    {
+                        var itemField = string.Join(".", parts.Skip(i + 1));
+                        return BuildCollectionExpressionDirect<T>(currentPath, itemField, condition, parameter, options);
+                    }
+                    currentType = prop.PropertyType;
+                }
+            }
+        }
+
+        var propertyAccess = parameter.GetPropertyAccess(field, out var property);
+        if (propertyAccess == null || property == null) return null;
+
+        var typeBuilder = options.GetTypeBuilder(property.PropertyType);
+        if (typeBuilder != null)
+        {
+            return typeBuilder.BuildExpression(propertyAccess, condition);
+        }
+
+        return BuildStandardExpression(parameter, property, condition.Operator, condition.Value, options, condition.CaseSensitiveFilter, propertyAccess);
     }
 
     private static MethodCallExpression? BuildCollectionExpressionDirect<T>(string collectionPath, string itemField, FilterCondition condition, ParameterExpression parameter, QueryFilterOptions options)
@@ -225,6 +232,9 @@ public static class FilterExpressionBuilder
                 return isString ? Expression.Call(StringIsNullOrEmpty, propertyAccess) : null;
             case FilterOperator.IsNotNullOrEmpty:
                 return isString ? Expression.Not(Expression.Call(StringIsNullOrEmpty, propertyAccess)) : null;
+            case FilterOperator.In:
+            case FilterOperator.IsContainedIn:
+                return BuildInExpression(propertyAccess, property.PropertyType, value);
         }
 
         object? convertedValue;
@@ -238,7 +248,7 @@ public static class FilterExpressionBuilder
         {
             propExpr = Expression.Call(propertyAccess, StringToLower);
             // Optimization: Lowercase the constant value once during expression building, not at runtime.
-            valExpr = Expression.Constant(strVal.ToLower());
+            valExpr = Expression.Constant(strVal.ToLowerInvariant());
         }
 
         return operatorType switch
@@ -256,6 +266,24 @@ public static class FilterExpressionBuilder
             _ => null
         };
     }
+
+    private static Expression BuildInExpression(Expression propertyAccess, Type propertyType, object? value)
+    {
+        var list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(propertyType))!;
+        foreach (var item in EnumerateValues(value))
+            list.Add(ConvertValue(item, propertyType));
+
+        return Expression.Call(typeof(Enumerable), nameof(Enumerable.Contains), [propertyType], Expression.Constant(list), propertyAccess);
+    }
+
+    private static IEnumerable<object?> EnumerateValues(object? value) => value switch
+    {
+        null => [],
+        JsonElement { ValueKind: JsonValueKind.Array } json => json.EnumerateArray().Cast<object?>(),
+        string text => text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
+        System.Collections.IEnumerable items => items.Cast<object?>(),
+        _ => [value]
+    };
 
     private static object? ConvertValue(object? value, Type targetType)
     {
@@ -275,21 +303,21 @@ public static class FilterExpressionBuilder
         }
         if (value == null) return null;
         if (underlyingType.IsAssignableFrom(value.GetType())) return value;
-        var strValue = value.ToString();
+        var strValue = Convert.ToString(value, CultureInfo.InvariantCulture);
         if (string.IsNullOrEmpty(strValue)) return null;
         if (underlyingType == typeof(Guid)) return Guid.Parse(strValue);
         if (underlyingType.IsEnum) return Enum.Parse(underlyingType, strValue, true);
         if (underlyingType == typeof(DateTime) || underlyingType == typeof(DateTimeOffset))
         {
-            if (DateTime.TryParse(strValue, out var dt))
+            if (DateTime.TryParse(strValue, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
                 return underlyingType == typeof(DateTime) ? dt : (object)new DateTimeOffset(dt);
         }
         if (underlyingType == typeof(long))
         {
-            if (DateTime.TryParse(strValue, out var dt)) return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
-            if (long.TryParse(strValue, out var lv)) return lv;
+            if (DateTime.TryParse(strValue, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt)) return new DateTimeOffset(dt).ToUnixTimeMilliseconds();
+            if (long.TryParse(strValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lv)) return lv;
         }
-        return Convert.ChangeType(strValue, underlyingType);
+        return Convert.ChangeType(strValue, underlyingType, CultureInfo.InvariantCulture);
     }
 }
 

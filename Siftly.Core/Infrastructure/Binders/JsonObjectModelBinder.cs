@@ -60,6 +60,6 @@ public class JsonObjectModelBinder : IModelBinder
                (v.StartsWith("[") && v.EndsWith("]")) ||
                (v.StartsWith("\"") && v.EndsWith("\"")) ||
                bool.TryParse(v, out _) ||
-               double.TryParse(v, out _);
+               double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out _);
     }
 }
